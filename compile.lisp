@@ -8,5 +8,6 @@
 
 (format t "~&eta loaded, about to create executable.")
 (uiop:dump-image "/eta/lispapp"
+;; (uiop:dump-image "lispapp"
    :executable t
    #+sbcl :compression #+sbcl t)

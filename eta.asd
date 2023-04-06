@@ -56,5 +56,5 @@
   :description "Shell to run Eta dialogue manager"
   :author "Benjamin Kane <bkane2@ur.rochester.edu>"
   :license "GPLv3"
-  :depends-on (:eta)
+  :depends-on (:eta :alexandria :hunchentoot)
   :components ((:file "run")))
