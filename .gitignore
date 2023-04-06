@@ -31,3 +31,7 @@ env
 
 # Batch files
 *.bat
+
+# Executables
+dependencies.core
+lispapp

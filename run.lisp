@@ -5,4 +5,5 @@
 (in-package :eta/run)
 
 (defun run ()
+  (in-package :eta)
   (start))
