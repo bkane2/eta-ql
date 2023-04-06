@@ -1,0 +1,33 @@
+# DS_Store files
+**/.DS_Store
+
+# Stored gist clauses
+gist-kb/*
+
+# IO files
+io/*
+
+# package fasl files
+**/*.fasl
+
+# any TODO or NOTES files
+**/TODO*
+**/NOTES*
+
+# any test avatars
+avatars/test_*
+
+# logs
+logs/**/logs_*
+logs/logs
+logs/**/*.csv
+logs/sophie-test
+
+# API keys
+config/keys
+
+# Pyenv
+env
+
+# Batch files
+*.bat
