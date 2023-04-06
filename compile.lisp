@@ -7,7 +7,6 @@
 (setf uiop:*image-entry-point* 'eta/run:run)
 
 (format t "~&eta loaded, about to create executable.")
-;; (uiop:dump-image "/eta/lispapp"
-(uiop:dump-image "lispapp"
+(uiop:dump-image "/eta/lispapp"
    :executable t
    #+sbcl :compression #+sbcl t)
