@@ -468,6 +468,15 @@
 
   ; Initialize information-retrieval if among dependencies (prevents delay on first invocation)
   (when (member "information-retrieval" *dependencies* :test #'string-equal)
+    ; Set correct model paths if custom model paths are given
+    (dolist (model *model-names*)
+      (when (equal (car model) "information-retrieval")
+        (dolist (submodel (cdr model))
+          (cond
+            ((equal (first submodel) "sentence-transformer")
+              (information-retrieval:set-model (second submodel)))
+            ((equal (first submodel) "cross-encoder")
+              (information-retrieval:set-cross-encoder (second submodel)))))))
     (information-retrieval:init))
 
   ; Initialize ulf2english if among dependencies (prevents delay on first invocation)
@@ -485,8 +494,8 @@
 
 
 (defun eta (&key (subsystems-perception '(|Terminal| |Audio|)) (subsystems-specialist '())
-                 (dependencies nil) (response-generator 'RULE) (gist-interpreter 'RULE) (parser 'RULE)
-                 (emotions nil) (read-log nil)) ; {@}
+                 (dependencies nil)  (model-names nil) (response-generator 'RULE) (gist-interpreter 'RULE)
+                 (parser 'RULE) (emotions nil) (read-log nil)) ; {@}
 ;``````````````````````````````````````````````````````````````````````````````````````````````````````````
 ; Main program: Originally handled initial and final formalities,
 ; (now largely commented out) and controls the loop for producing,
@@ -495,6 +504,7 @@
 ; formation, gist clause formation, etc.).
 ;
   (setq *dependencies* dependencies)
+  (setq *model-names* model-names)
   (validate-dependencies parser response-generator gist-interpreter)
 
   (init)

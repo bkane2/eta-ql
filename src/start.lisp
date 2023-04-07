@@ -195,7 +195,7 @@
     ;`````````````````````````
     (*safe-mode*
       (handler-case (eta :subsystems-perception *subsystems-perception* :subsystems-specialist *subsystems-specialist*
-                        :emotions *emotion-tags* :dependencies *dependencies* :response-generator *generation-mode*
+                        :emotions *emotion-tags* :dependencies *dependencies* :model-names *model-names* :response-generator *generation-mode*
                         :gist-interpreter *interpretation-mode* :parser *parser-mode*)
         (error (c)
           (error-message "Execution of Eta failed due to an internal error.")
@@ -216,13 +216,13 @@
           (format t "==:: READING LOG ~a ::==~%" log)
           (load-avatar-files *avatar*)
           (eta :read-log log :subsystems-perception *subsystems-perception* :subsystems-specialist *subsystems-specialist*
-              :emotions *emotion-tags* :dependencies *dependencies* :response-generator *generation-mode*
+              :emotions *emotion-tags* :dependencies *dependencies* :model-names *model-names* :response-generator *generation-mode*
               :gist-interpreter *interpretation-mode* :parser *parser-mode*)) logs)))
 
     ; Run Eta
     ;`````````````````````````
     (t (eta :subsystems-perception *subsystems-perception* :subsystems-specialist *subsystems-specialist*
-            :emotions *emotion-tags* :dependencies *dependencies* :response-generator *generation-mode*
+            :emotions *emotion-tags* :dependencies *dependencies* :model-names *model-names* :response-generator *generation-mode*
             :gist-interpreter *interpretation-mode* :parser *parser-mode*)))
 
 
