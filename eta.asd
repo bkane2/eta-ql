@@ -50,11 +50,3 @@
                       ; For development use (debug 3) (safety 3) (space 1) (speed 1)
                       (proclaim '(optimize (debug 0) (safety 2) (space 1) (speed 3)))
                       (funcall next)))
-
-(asdf:defsystem :eta/run
-  :serial t
-  :description "Shell to run Eta dialogue manager"
-  :author "Benjamin Kane <bkane2@ur.rochester.edu>"
-  :license "GPLv3"
-  :depends-on (:eta :alexandria :hunchentoot)
-  :components ((:file "run")))

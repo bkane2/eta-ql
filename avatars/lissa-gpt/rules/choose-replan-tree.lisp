@@ -1,3 +1,0 @@
-(READRULES '*replan-tree*
-'(
-))
