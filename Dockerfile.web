@@ -2,7 +2,7 @@ FROM ubuntu:latest AS basepackages
 
 # Install OS-level dependencies
 RUN apt-get update
-RUN apt-get install -y sbcl curl libpq-dev
+RUN apt-get install -y sbcl curl libpq-dev git-all
 
 # Install quicklisp and some dependencies (regardless of the asd) for
 # faster builds.
