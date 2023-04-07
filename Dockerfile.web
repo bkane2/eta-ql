@@ -23,7 +23,7 @@ RUN git clone https://github.com/genelkim/gute.git root/quicklisp/local-projects
 RUN git clone https://github.com/genelkim/ttt.git root/quicklisp/local-projects/ttt
 RUN git clone https://github.com/genelkim/ulf-lib.git root/quicklisp/local-projects/ulf-lib
 RUN git clone https://github.com/bkane2/gpt3-shell.git root/quicklisp/local-projects/gpt3-shell
-RUN git clone https://github.com/bkane2/information-retrieval.git root/quicklisp/local-projects/gpt3-shell
+RUN git clone https://github.com/bkane2/information-retrieval.git root/quicklisp/local-projects/information-retrieval
 RUN git clone https://github.com/genelkim/ulf2english.git root/quicklisp/local-projects/ulf2english
 RUN git clone https://github.com/genelkim/ulf-pragmatics.git root/quicklisp/local-projects/ulf-pragmatics
 RUN git clone https://github.com/dlowe-net/local-time.git root/quicklisp/local-projects/local-time
