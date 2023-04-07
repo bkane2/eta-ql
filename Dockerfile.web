@@ -33,4 +33,4 @@ RUN sbcl --non-interactive \
 
 # ENTRYPOINT [ "./lispapp" ]
 
-ENTRYPOINT ["./test.sh"]
+# ENTRYPOINT ["./test.sh"]
