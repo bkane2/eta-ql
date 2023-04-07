@@ -285,19 +285,24 @@
 
 (defun get-api-key (api)
 ;``````````````````````````
-; Reads an API key from a corresponding text file in config/keys.
+; Reads an API key from either the "<api-name>_key" environment variable, or
+; a corresponding text file in config/keys.
 ; Returns nil and prints a warning if the API key does not exist.
-  (let ((fname (concatenate 'string "config/keys/" api ".txt")) in key)
-    (ensure-directories-exist "config/keys")
+  (let ((fname (concatenate 'string "config/keys/" api ".txt")) (kname (concatenate 'string api "_key")) in key)
     (cond
-      ((probe-file fname)
-        (setq in (open fname))
-        (setq key (read-line in))
-        (close in)
-        key)
+      ((posix-getenv kname)
+        (posix-getenv kname))
       (t
-        (format t "~% --- Warning: API key for ~a not found in ~a.~%" api fname)
-        nil))
+        (ensure-directories-exist "config/keys")
+        (cond
+          ((probe-file fname)
+            (setq in (open fname))
+            (setq key (read-line in))
+            (close in)
+            key)
+          (t
+            (format t "~% --- Warning: API key for ~a not found in ~a.~%" api fname)
+            nil))))
 )) ; END get-api-key
 
 
