@@ -1,5 +1,9 @@
 FROM ubuntu:latest AS basepackages
 
+# Needed to install tzdata
+ENV TZ=America/New_York
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
 # Install OS-level dependencies
 RUN apt-get update
 RUN apt-get install -y sbcl curl libpq-dev git-all
