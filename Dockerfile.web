@@ -13,22 +13,24 @@ RUN sbcl --non-interactive \
     --eval "(quicklisp-quickstart:install)" \
     --eval "(ql:quickload '(ironclad cffi alexandria))"
 
-# Install the missing dependencies from the asd file
-FROM quicklisp AS dependencies
-COPY --from=quicklisp /root/ /root/
-RUN mkdir /eta
-WORKDIR /eta
-COPY eta.asd compile-dependencies.lisp ./
+# # Install the missing dependencies from the asd file
+# FROM quicklisp AS dependencies
+# COPY --from=quicklisp /root/ /root/
+# RUN mkdir /eta
+# WORKDIR /eta
+# COPY eta.asd compile-dependencies.lisp ./
 
-RUN sbcl --disable-debugger --load '/root/quicklisp/setup.lisp' \
-	 --load 'compile-dependencies.lisp'
+# RUN sbcl --disable-debugger --load '/root/quicklisp/setup.lisp' \
+# 	 --load 'compile-dependencies.lisp'
 
-FROM basepackages AS eta
-COPY --from=dependencies /root/ /root/
-RUN mkdir /eta
-WORKDIR /eta
-COPY --from=dependencies /eta/dependencies.core dependencies.core
-COPY . .
-RUN sbcl --core 'dependencies.core'
+# FROM basepackages AS eta
+# COPY --from=dependencies /root/ /root/
+# RUN mkdir /eta
+# WORKDIR /eta
+# COPY --from=dependencies /eta/dependencies.core dependencies.core
+# COPY . .
+# RUN sbcl --core 'dependencies.core'
 
-ENTRYPOINT [ "./lispapp" ]
+# ENTRYPOINT [ "./lispapp" ]
+
+ENTRYPOINT ["./test.sh"]
