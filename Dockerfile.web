@@ -15,7 +15,7 @@ RUN curl 'https://beta.quicklisp.org/quicklisp.lisp' > quicklisp.lisp
 RUN sbcl --non-interactive \
     --load "/quicklisp.lisp" \
     --eval "(quicklisp-quickstart:install)" \
-    --eval "(ql:quickload '(ironclad cffi alexandria))"
+    --eval "(ql:quickload '(ironclad cffi alexandria))" \
     --eval "(ql-dist:install-dist \"http://dist.ultralisp.org/\" :prompt nil)"
 
 # Install local quicklisp dependencies
