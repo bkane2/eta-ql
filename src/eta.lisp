@@ -3248,7 +3248,8 @@
         (string (schema-predicate (gethash schema (ds-schema-instances *ds*))))) schemas) #\,)) ; DEBUGGING
 
     ; Get relevant knowledge
-    (setq relevant-knowledge (reverse (retrieve-relevant-knowledge-from-kb query-str)))
+    (when (member "information-retrieval" *dependencies* :test #'string-equal)
+      (setq relevant-knowledge (reverse (retrieve-relevant-knowledge-from-kb query-str))))
 
     (format t "~%  * Generating response using retrieved facts~%      (from \"~a\"):~%   ~a " query-str relevant-knowledge) ; DEBUGGING
 
