@@ -122,6 +122,8 @@
   (FOREIGN francais deutsch italiano espanol francais \? deutsch \? italiano \? espanol \?)
   (END-PUNC - ? ! \. \: \;)
   (CLAUSE-PUNC END-PUNC \,)
+  (END-PUNC-DECL - ! \. \: \;)
+  (CLAUSE-PUNC-DECL END-PUNC-DECL \,)
   (THEME-KEY pet-key chat1-opening chat1-rochester chat1-movies
     ; we could add other keys, as a flag for
     ; adhering to a particular theme (i.e., capture
