@@ -472,12 +472,17 @@
     (dolist (model *model-names*)
       (when (equal (car model) "information-retrieval")
         (dolist (submodel (cdr model))
+          (when (equal '(:api t) (member :api submodel))
+            (when (null (get-api-key "huggingface"))
+              (format t "~% --- Warning: Using API for information-retrieval requires a valid")
+              (format t "~%              HuggingFace API key to be provided in config/keys/huggingface.txt.~%"))
+            (information-retrieval:set-api t))
           (cond
             ((equal (first submodel) "sentence-transformer")
               (information-retrieval:set-model (second submodel)))
             ((equal (first submodel) "cross-encoder")
               (information-retrieval:set-cross-encoder (second submodel)))))))
-    (information-retrieval:init))
+    (information-retrieval:init :api-key (get-api-key "huggingface")))
 
   ; Initialize ulf2english if among dependencies (prevents delay on first invocation)
   (when (member "ulf2english" *dependencies* :test #'string-equal)

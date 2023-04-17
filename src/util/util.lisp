@@ -3481,7 +3481,8 @@
 ; and dumps the knowledge+embeddings into a CSV file for future use.
 ;
   (information-retrieval:embed-documents knowledge
-    :filename (get-io-path "knowledge_embedded.csv"))
+    :filename (get-io-path "knowledge_embedded.csv")
+    :api-key (get-api-key "huggingface"))
 ) ; END precompute-knowledge-embeddings
 
 
@@ -3494,7 +3495,8 @@
 ;
   (coerce
     (information-retrieval:retrieve text
-      :filename (get-io-path "knowledge_embedded.csv"))
+      :filename (get-io-path "knowledge_embedded.csv")
+      :api-key (get-api-key "huggingface"))
     'list)
 ) ; END retrieve-relevant-knowledge-from-kb
 
