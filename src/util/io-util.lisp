@@ -290,8 +290,8 @@
 ; Returns nil and prints a warning if the API key does not exist.
   (let ((fname (concatenate 'string "config/keys/" api ".txt")) (kname (concatenate 'string api "_key")) in key)
     (cond
-      ((posix-getenv kname)
-        (posix-getenv kname))
+      ((uiop:getenv kname)
+        (uiop:getenv kname))
       (t
         (ensure-directories-exist "config/keys")
         (cond
