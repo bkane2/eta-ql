@@ -74,9 +74,6 @@
   ; Ensure that empty conversation log files exist
   (ensure-log-files-exist)
 
-  ; Delete the content of the sessionInfo.lisp file after reading
-  (with-open-file (outfile (get-io-path "sessionInfo.lisp")
-    :direction :output :if-exists :supersede :if-does-not-exist :create))
   ; Delete the content of output.txt, if it exists, otherwise create
   (with-open-file (outfile (get-io-path "output.txt")
     :direction :output :if-exists :supersede :if-does-not-exist :create))
@@ -159,10 +156,12 @@
     ;; (princ "user id: ") (finish-output)
     ;; (setq *user-id* (write-to-string (read))))
   )
-  (when (not *user-name*)
+  (when (and (not *user-name*) (member '|Terminal| *subsystems-perception*))
     (format t "~%~%Enter user name ~%")
     (princ "user name: ") (finish-output)
     (setq *user-name* (read-line)))
+  (when (not *user-name*)
+    (setq *user-name* "Test User"))
 
 
   ; Validate dependency settings
