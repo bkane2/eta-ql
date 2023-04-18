@@ -23,6 +23,8 @@
     (ensure-directories-exist (concatenate 'string (get-io-path "conversation-log/") instance-dir))
     (with-open-file (outfile (concatenate 'string (get-io-path "conversation-log/") instance-dir "text.txt")
       :direction :output :if-exists :supersede :if-does-not-exist :create))
+    (with-open-file (outfile (concatenate 'string (get-io-path "conversation-log/") instance-dir "text-readable.txt")
+      :direction :output :if-exists :supersede :if-does-not-exist :create))
     (with-open-file (outfile (concatenate 'string (get-io-path "conversation-log/") instance-dir "gist.txt")
       :direction :output :if-exists :supersede :if-does-not-exist :create))
     (with-open-file (outfile (concatenate 'string (get-io-path "conversation-log/") instance-dir "semantic.txt")
