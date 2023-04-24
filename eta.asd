@@ -6,7 +6,7 @@
     :author "Benjamin Kane <bkane2@ur.rochester.edu>"
     :license "GPLv3"
     :depends-on ("priority-queue" "ttt" "ulf-lib" "gpt3-shell" "information-retrieval" "ulf2english"
-                 "ulf-pragmatics" "timegraph" "lenulf" "standardize-ulf")
+                 "ulf-pragmatics" "standardize-ulf")
 
     :components ((:static-file "eta.asd")
         (:file "package")
