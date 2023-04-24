@@ -489,8 +489,8 @@
     (ulf2english:ulf2english '(this.pro ((pres be.v) (= (a.d (test.n |ULF|.n)))))))
 
   ; Initialize lenulf if among dependencies (prevents delay on first invocation)
-  (when (equal *parser* 'BLLIP)
-    (parse-str-to-ulf-bllip "This is a test sentence."))
+  ;; (when (equal *parser* 'BLLIP)
+  ;;   (parse-str-to-ulf-bllip "This is a test sentence."))
 
 ) ; END validate-dependencies
 
@@ -3515,8 +3515,8 @@
     (setq ulf (choose-result-for clause '*clause-semantics-tree*))
 
     ; If using BLLIP parser mode and no ULF, use parser to obtain ULF.
-    (when (equal *parser* 'BLLIP)
-      (setq ulf (parse-str-to-ulf-bllip (words-to-str clause))))
+    ;; (when (equal *parser* 'BLLIP)
+    ;;   (setq ulf (parse-str-to-ulf-bllip (words-to-str clause))))
 
   ulf)
 ) ; END form-semantics-from-gist-clause

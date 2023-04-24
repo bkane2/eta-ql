@@ -3444,26 +3444,26 @@
 
 
 
-(defun parse-str-to-ulf-bllip (str)
-;``````````````````````````````````````````
-; Parses a string into a ULF using the BLLIP-based ULF parser
-; (i.e., the :lenulf package).
-; 
-; NOTE: due to the way that symbols are interned in the :lenulf package,
-; this requires temporarily entering the :lenulf package to run the parser,
-; and then re-entering :cl-user, which is the default package that Eta is assumed
-; to be running within. Furthermore, the :cl-user package must be passed as an
-; argument to standardize-ulf in order to intern the final symbols in the correct package.
-; This may need to be changed in the future if it ends up becoming a problem.
-;
-  (let (ulf)
-    (in-package :lenulf)
-    (setq ulf (standardize-ulf:standardize-ulf
-        (lenulf:remove-token-indices (lenulf:english-to-ulf str))
-      :pkg :cl-user))
-    (in-package :cl-user)
-    ulf
-)) ; END parse-str-to-ulf-bllip
+;; (defun parse-str-to-ulf-bllip (str)
+;; ;``````````````````````````````````````````
+;; ; Parses a string into a ULF using the BLLIP-based ULF parser
+;; ; (i.e., the :lenulf package).
+;; ; 
+;; ; NOTE: due to the way that symbols are interned in the :lenulf package,
+;; ; this requires temporarily entering the :lenulf package to run the parser,
+;; ; and then re-entering :cl-user, which is the default package that Eta is assumed
+;; ; to be running within. Furthermore, the :cl-user package must be passed as an
+;; ; argument to standardize-ulf in order to intern the final symbols in the correct package.
+;; ; This may need to be changed in the future if it ends up becoming a problem.
+;; ;
+;;   (let (ulf)
+;;     (in-package :lenulf)
+;;     (setq ulf (standardize-ulf:standardize-ulf
+;;         (lenulf:remove-token-indices (lenulf:english-to-ulf str))
+;;       :pkg :cl-user))
+;;     (in-package :cl-user)
+;;     ulf
+;; )) ; END parse-str-to-ulf-bllip
 
 
 
