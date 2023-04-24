@@ -123,14 +123,16 @@
 
 
 
-(defun start ()
-;````````````````````
+(defun start (&key agent-id)
+;````````````````````````````
 ; Starts the dialogue manager by loading config, loading the selected avatar files,
 ; and calling the top-level eta funtion.
 ;
 
   ; Load the config file corresponding to the session's agent-id.
   ; TODO: could modify this to auto-generate a default config file if one doesn't exist for the agent-id.
+  (when (and agent-id (or (stringp agent-id) (numberp agent-id)) (not (boundp '*agent-id*)))
+    (setq *agent-id* agent-id))
   (load
     (if (and (boundp '*agent-id*) *agent-id* (or (stringp *agent-id*) (numberp *agent-id*))
             (probe-file (format nil "config/~a.lisp" *agent-id*)))
@@ -143,6 +145,7 @@
     (if (and (boundp '*agent-id*) *agent-id* (or (stringp *agent-id*) (numberp *agent-id*)))
       (format nil "./io/~a/" *agent-id*)
       (format nil "./io/")))
+  (format t ">>~a~%" *io-path*)
 
 
   ; If live mode, load *user-id* and *user-name* from sessionInfo file (if it exists).
