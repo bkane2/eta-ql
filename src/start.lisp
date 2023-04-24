@@ -145,7 +145,6 @@
     (if (and (boundp '*agent-id*) *agent-id* (or (stringp *agent-id*) (numberp *agent-id*)))
       (format nil "./io/~a/" *agent-id*)
       (format nil "./io/")))
-  (format t ">>~a~%" *io-path*)
 
 
   ; If live mode, load *user-id* and *user-name* from sessionInfo file (if it exists).
