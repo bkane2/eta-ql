@@ -453,8 +453,7 @@
                        ; recursion failed
                        :nil))
                  :nil) ) ; initial-element match failed
-            (t (format t "~%*** (match ~a ~a) ~%   ~
-                           gave neither success nor failure!" pa ex)
+            (t (format t "~%*** (match ~a ~a) ~%   gave neither success nor failure!" pa ex)
                '***ERROR))
 )) ; END match (NEW VERSION)
 
@@ -747,10 +746,7 @@
   (cond ((atom expr) expr)
         ((eq (car expr) :seq) 
          (if (= (length expr) 2) (second expr)
-             (prog2 (format t "~%## WARNING: 'flatten-sequences' cannot ~
-                               flatten top-level sequence~%##          ~s ~
-                               ~%##          as this would give a non-Lisp ~
-                               expression" expr)
+             (prog2 (format t "~%## WARNING: 'flatten-sequences' cannot flatten top-level sequence~%##          ~s ~%##          as this would give a non-Lisp expression" expr)
              expr))); return unexpected expr unchanged
         ((atom (car expr)) 
          (cons (car expr) (flatten-sequences (cdr expr))))

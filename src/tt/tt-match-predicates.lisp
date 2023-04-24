@@ -72,17 +72,14 @@
 ;
  (let (str result)
       (cond ((not (symbolp !name))
-             (format t "~%**ERROR: 'store-pred-name-variants' wants symbol ~
-              arg, got ~a" !name))
+             (format t "~%**ERROR: 'store-pred-name-variants' wants symbol arg, got ~a" !name))
             ((and (setq str (string !name)) nil) nil); continue after setq
             ((not (char= (schar str 0) #\!))
-             (format t "~%**ERROR: 'store-pred-name-variants' wants !<name>, ~
-              got ~a" !name))
+             (format t "~%**ERROR: 'store-pred-name-variants' wants !<name>, got ~a" !name))
             (t (setq str (string-left-trim "!" str))
                (when (intersection (coerce str 'list) 
                                   '(#\, #\; #\Space #\( #\) #\:))
-                     (format t "~%**ERROR: 'store-pred-name-variants' got ~
-                         an unacceptable !-predicate '~a' as arg" !name)
+                     (format t "~%**ERROR: 'store-pred-name-variants' got an unacceptable !-predicate '~a' as arg" !name)
                      (return-from store-pred-name-variants nil))
                (dolist (punc '("+" "*" "?"))
                   (push (intern (concatenate 'string punc str)) result)
