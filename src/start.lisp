@@ -229,9 +229,9 @@
             :gist-interpreter *interpretation-mode* :parser *parser-mode*)))
 
 
-  ; Write user gist clauses to file
-  ;````````````````````````````````````
-  (print-gist-kb :filename
-    (ensure-directories-exist (concatenate 'string "./gist-kb/" *user-id* ".txt")))
+  ;; ; Write user gist clauses to file
+  ;; ;````````````````````````````````````
+  ;; (print-gist-kb :filename
+  ;;   (ensure-directories-exist (concatenate 'string "./gist-kb/" *user-id* ".txt")))
 
 ) ; END start
