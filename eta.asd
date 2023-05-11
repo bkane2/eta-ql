@@ -18,7 +18,9 @@
                 (:file "timegraph-util")
                 (:file "io-util")
                 (:file "schema-util")
-                (:file "plan-util")))
+                (:file "plan-util")
+                (:file "gpt-util")
+                (:file "embedding-util")))
             (:module "tt" :depends-on ("util") :serial t :components
                ((:file "tt")
                 (:file "tt-match-predicates")))
