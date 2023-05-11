@@ -801,6 +801,15 @@
 
 
 
+(defun statement? (sentence)
+;```````````````````````````````````````
+; A sentence is a statement if it is not a question.
+;
+  (and (sentence? sentence) (not (question? sentence)))
+) ; END statement?
+
+
+
 (defun quoted-question? (sentence)
 ;```````````````````````````````````````
 ; Is sentence of form (quote (<word> ... <word> ?)), or with the
@@ -2945,14 +2954,16 @@
 
 
 
-(defun shortname (name &key firstname)
-;``````````````````````````````````````
+(defun shortname (name &key firstname handle-acronyms)
+;````````````````````````````````````````````````````````````
 ; Gets the short version of a name string (if name includes a title,
 ; shortname is title + last name, otherwise shortname is first name).
 ; If :firstname t is given, return only first name.
+; if :handle-acronyms t is given, add a space after (all-cap) acronyms
+; to ensure correct processing by ULF2English.
 ;
-  (let ((parts (str-split name #\ )))
-    (cond
+  (let ((parts (str-split name #\ )) ret)
+    (setq ret (cond
       ; Includes title, first name, and last name
       ((and (>= (length parts) 3)
             (member #\. (explode (first parts))))
@@ -2965,7 +2976,11 @@
         (if firstname
           ""
           (concatenate 'string (first parts) " " (second parts))))
-      (t (first parts)))
+      (t (first parts))))
+    ; If string is all caps, need to add a space at the end so ULF2English works
+    (if (and handle-acronyms (equal ret (string-upcase ret)))
+      (concatenate 'string ret " ")
+      ret)
 )) ; END shortname
 
 
@@ -3016,6 +3031,20 @@
 
 
 
+(defun expr-to-words (expr)
+;````````````````````````````
+; Converts an expression (which may already be
+; a quoted wordlist) to a quoted wordlist.
+; 
+  (cond
+    ((atom expr) (list expr))
+    ((quoted-sentence? expr) (second expr))
+    ((sentence? expr) expr)
+    (t (mapcar (lambda (word) (if (equal word '^me) (shortname *^me*) word)) wordlist)))
+) ; END expr-to-words
+
+
+
 (defun expr-to-str (expr)
 ;```````````````````````````
 ; Converts an expression (which is either a
@@ -3034,6 +3063,8 @@
 ; Converts a list of word symbols to a string.
 ;
   (let (ret)
+    (setq wordlist
+      (mapcar (lambda (word) (if (equal word '^me) (shortname *^me*) word)) wordlist))
     (setq ret (format nil "~{~a ~}" wordlist))
     (standardize-case+punctuation ret)
 )) ; END words-to-str
@@ -3109,14 +3140,14 @@
     ((equal ulf '^me)
       (list (if me-pron
         (get-pron-case *^me* 'obj)
-        (intern (shortname *^me*)))
+        (intern (shortname *^me* :handle-acronyms t)))
       t you-pron))
     ; If ^you is encountered as an object (non-car of a list),
     ; replace with them/her/him (if anaphoric) or the value of ^you.
     ((equal ulf '^you)
       (list (if you-pron
         (get-pron-case *^you* 'obj)
-        (intern (shortname *^you*)))
+        (intern (shortname *^you* :handle-acronyms t)))
       me-pron t))
     ; Non-indexical atom.
     ((atom ulf)
@@ -3126,7 +3157,7 @@
     ((equal (car ulf) '^me)
       (list (cons (if me-pron
               (get-pron-case *^me* 'subj)
-              (intern (shortname *^me*)))
+              (intern (shortname *^me* :handle-acronyms t)))
         (first (preprocess-ulf-pronouns-for-prompt (cdr ulf) :me-pron t :you-pron you-pron)))
       t you-pron))
     ; If ^you is encountered as a subject (car of a list),
@@ -3134,7 +3165,7 @@
     ((equal (car ulf) '^you)
       (list (cons (if you-pron
               (get-pron-case *^you* 'subj)
-              (intern (shortname *^you*)))
+              (intern (shortname *^you* :handle-acronyms t)))
         (first (preprocess-ulf-pronouns-for-prompt (cdr ulf) :me-pron me-pron :you-pron t)))
       me-pron t))
     ; If possessive subject with ^me and anaphoric, replace with their/her/his.
@@ -3236,19 +3267,35 @@
 
 
 
-(defun generate-prompt-paraphrase (facts examples prev-utterance gist-clause)
-;``````````````````````````````````````````````````````````````````````````````````
+(defun generate-prompt-paraphrase (conds facts examples prev-utterance gist-clause incomplete-utterance mode)
+;```````````````````````````````````````````````````````````````````````````````````````````````````````````````
 ; Generates a GPT-3 prompt for paraphrasing from facts, which is a list of strings,
 ; a list of examples (3-tuples of strings), a previous utterance string, and a
 ; gist-clause string.
+; If a string is given for :incomplete-utterance, it is treated as a partially-generated
+; response for GPT-3 to continue to fill in.
 ;
   (let (prompt)
     (setq prompt (format nil "~:(~a~) is having a conversation with ~:(~a~). " *^you* *^me*))
-    (setq prompt (concatenate 'string prompt (str-join facts " ")))
+    (setq prompt (concatenate 'string prompt (str-join conds " ")))
     (setq prompt (concatenate 'string prompt
-      (format nil "[N][N]Rewrite the following conversations as conversations between ~a and ~a:[N][N]"
+      (format nil "[N][N]Rewrite the following conversations as conversations between ~a and ~a:"
         (shortname (string *^you*)) (shortname (string *^me*)))))
+
+    (when facts
+      (setq prompt (concatenate 'string prompt
+        "[N][N]"
+        "Use the following facts in your rewritings:[N]"
+        (str-join (mapcar (lambda (fact) (format nil "* ~a" fact)) facts) "[N]"))))
+
+    (cond
+      ((equal mode 'statement)
+        (setq prompt (concatenate 'string prompt "[N][N]Do not ask a question in your rewritten responses.")))
+      ((equal mode 'question)
+        (setq prompt (concatenate 'string prompt "[N][N]Ask a question in your rewritten responses."))))
+
     (setq prompt (concatenate 'string prompt
+      "[N][N]"
       ; Add examples to prompt
       (generate-prompt-preprocess-paraphrase-examples examples)
       "[N][N]"
@@ -3261,20 +3308,36 @@
       (format nil "~a " (generate-prompt-turn-start (string *^you*)))
       prev-utterance
       (generate-prompt-turn-start (string *^me*))))
+    (when incomplete-utterance
+      (setq prompt (concatenate 'string prompt " " incomplete-utterance)))
     prompt
 )) ; END generate-prompt-paraphrase
 
 
 
-(defun generate-prompt-unconstrained (facts history)
-;````````````````````````````````````````````````````````
-; Generates a GPT-3 prompt for unconstrained generation from facts,
-; which is a list of strings, and history, which is a list of
-; lists (agent turn) where agent and turn are both strings.
+(defun generate-prompt-unconstrained (conds facts history mode)
+;````````````````````````````````````````````````````````````````
+; Generates a GPT-3 prompt for unconstrained generation from conds,
+; which is a list of strings; facts, which is a list of strings;
+; and history, which is a list of lists (agent turn) where agent and
+; turn are both strings.
 ;
   (let (prompt)
     (setq prompt (format nil "Write a conversation between ~:(~a~) and ~:(~a~). " *^you* *^me*))
-    (setq prompt (concatenate 'string prompt (str-join facts " ")))
+    (setq prompt (concatenate 'string prompt (str-join conds " ")))
+
+    (when facts
+      (setq prompt (concatenate 'string prompt
+        "[N][N]"
+        "Use the following facts in your response:[N]"
+        (str-join (mapcar (lambda (fact) (format nil "* ~a" fact)) facts) "[N]"))))
+
+    (cond
+      ((equal mode 'statement)
+        (setq prompt (concatenate 'string prompt "[N][N]Do not ask a question in your response.")))
+      ((equal mode 'question)
+        (setq prompt (concatenate 'string prompt "[N][N]Ask a question in your response."))))
+
     (setq prompt (concatenate 'string prompt "[N]"
       ; Add initial greeting from user to prompt to calibrate GPT-3
       (format nil "~a Hi, ~a." (generate-prompt-turn-start (string *^you*)) (shortname (string *^me*)))
@@ -3336,8 +3399,8 @@
     (setq prompt (generate-prompt-emotion utterance history emotions))
     ;; (format t "~%  gpt-3 prompt:~%-------------~%~a~%-------------~%" prompt) ; DEBUGGING
     (setq stop-seq (vector
-      (generate-prompt-turn-start (format nil "~:(~a~)" *^you*))
-      (generate-prompt-turn-start (format nil "~:(~a~)" *^me*))))
+      (generate-prompt-turn-start (string *^you*))
+      (generate-prompt-turn-start (string *^me*))))
     ;; (format t "~%  gpt-3 stop-seq: ~s~%" stop-seq) ; DEBUGGING
     (setq generated (gpt3-generate (get-api-key "openai") prompt :stop-seq stop-seq))
     ;; (format t "~%  gpt-3 response:~%-------------~%~a~%-------------~%" generated) ; DEBUGGING
@@ -3349,49 +3412,63 @@
 
 
 
-(defun get-gpt3-paraphrase (facts examples prev-utterance gist-clause)
-;```````````````````````````````````````````````````````````````````````````
-; Generates a GPT-3 paraphrase given a prompt containing facts, which is a list of
-; strings; examples, which is a list of 3-tuples of strings representing example
-; paraphrases; prev-utterance, which is a string, and gist-clause, which is a string.
+(defun get-gpt3-paraphrase (conds facts examples prev-utterance gist-clause &key incomplete-utterance mode)
+;```````````````````````````````````````````````````````````````````````````````````````````````````````````
+; Generates a GPT-3 paraphrase given a prompt containing conds, which is a list of strings to
+; use in conditioning the LLM; facts, which is a list of strings that the LLM is prompted to
+; use in response generation; examples, which is a list of 3-tuples of strings representing example
+; paraphrases; prev-utterance, which is a string; and gist-clause, which is a string.
 ; Returns a list of words.
+
+; If a string is given for :incomplete-utterance, it is treated as a partially-generated
+; response for GPT-3 to continue to fill in.
+;
+; Optionally, :mode may be specified (either 'question or 'statement)
+; in order to prompt GPT-3 to specifically generate a question or statement
+; response type.
 ;
   (let (prompt stop-seq generated)
-    (setq prompt (generate-prompt-paraphrase facts examples prev-utterance gist-clause))
+    (setq prompt (generate-prompt-paraphrase conds facts examples prev-utterance gist-clause incomplete-utterance mode))
     ;; (format t "~%  gpt-3 prompt:~%-------------~%~a~%-------------~%" prompt) ; DEBUGGING
     (setq stop-seq (vector
-      (generate-prompt-turn-start (format nil "~:(~a~)" *^you*))
-      (generate-prompt-turn-start (format nil "~:(~a~)" *^me*))
+      (generate-prompt-turn-start (string *^you*))
+      (generate-prompt-turn-start (string *^me*))
       "Person A"
       "Person B"))
     ;; (format t "~%  gpt-3 stop-seq: ~s~%" stop-seq) ; DEBUGGING
     (setq generated (gpt3-generate (get-api-key "openai") prompt :stop-seq stop-seq))
     ;; (format t "~%  gpt-3 response:~%-------------~%~a~%-------------~%" generated) ; DEBUGGING
-    (parse-chars (coerce (trim-all-newlines generated) 'list))
+    (postprocess-generation (parse-chars (coerce (trim-all-newlines generated) 'list)) mode)
 )) ; END get-gpt3-paraphrase
 
 
 
-(defun get-gpt3-response (facts history)
-;``````````````````````````````````````````
-; Generates a GPT-3 response from facts, which is a list
-; of strings, and history, which is a list of lists (agent turn)
-; where agent and turn are both strings.
+(defun get-gpt3-response (conds facts history &key mode)
+;````````````````````````````````````````````````````````
+; Generates a GPT-3 response from conds, which is a list
+; of strings to use in conditioning the LLM; facts, which
+; is a list of strings that the LLM is prompted to use in
+; response generation; and history, which is a list of of
+; lists (agent turn) where agent and turn are both strings.
 ; Returns a list of words.
 ;
+; Optionally, :mode may be specified (either 'question or 'statement)
+; in order to prompt GPT-3 to specifically generate a question or statement
+; response type.
+;
   (let (prompt stop-seq generated)
-    (setq prompt (generate-prompt-unconstrained facts history))
+    (setq prompt (generate-prompt-unconstrained conds facts history mode))
     ;; (format t "~%  gpt-3 prompt:~%-------------~%~a~%-------------~%" prompt) ; DEBUGGING
     (setq stop-seq (vector
-      (generate-prompt-turn-start (format nil "~:(~a~)" *^you*))
-      (generate-prompt-turn-start (format nil "~:(~a~)" *^me*))))
+      (generate-prompt-turn-start (string *^you*))
+      (generate-prompt-turn-start (string *^me*))))
     ;; (format t "~%  gpt-3 stop-seq: ~s~%" stop-seq) ; DEBUGGING
     (setq generated (gpt3-generate (get-api-key "openai") prompt :stop-seq stop-seq))
     ;; (format t "~%  gpt-3 response:~%-------------~%~a~%-------------~%" generated) ; DEBUGGING
     ; Hack to remove parentheticals that GPT-3 sometimes generates
     (setq generated
       (str-replace (str-replace (str-replace (str-replace generated "* " "] ") "*" "[") "(" "[") ")" "]"))
-    (parse-chars (coerce (trim-all-newlines generated) 'list))
+    (postprocess-generation (parse-chars (coerce (trim-all-newlines generated) 'list)) mode)
 )) ; END get-gpt3-response
 
 
@@ -3433,6 +3510,21 @@
   (gpt3-shell:generate-safe 'gpt3-shell:generate-with-key
     (list (get-api-key "openai") prompt :stop-seq stop-seq))
 ) ; END gpt3-generate
+
+
+
+(defun postprocess-generation (generated mode)
+;``````````````````````````````````````````````````````````
+; Ensures that the generated utterance abides by the specified
+; mode (i.e., removing a question if 'mode' is 'statement).
+; 
+  (let (parts)
+    (setq parts (split-sentences generated))
+    (cond
+      ((equal mode 'statement)
+        (setq parts (reverse (member t (reverse parts) :key #'statement?)))))
+    (apply #'append parts)
+)) ; END postprocess-generation
 
 
 
@@ -3480,10 +3572,39 @@
 ; Precomputes embeddings for a given list of knowledge strings,
 ; and dumps the knowledge+embeddings into a CSV file for future use.
 ;
-  (information-retrieval:embed-documents knowledge
-    :filename (get-io-path "knowledge_embedded.csv")
-    :api-key (get-api-key "huggingface"))
-) ; END precompute-knowledge-embeddings
+  (let (knowledge-str)
+    (setq knowledge-str (mapcar #'expr-to-str knowledge))
+    (information-retrieval:embed-documents knowledge-str
+      :filename (get-io-path "embeddings/knowledge.csv")
+      :api-key (get-api-key "huggingface"))
+)) ; END precompute-knowledge-embeddings
+
+
+
+(defun precompute-schema-embeddings (schemas)
+;````````````````````````````````````````````````
+; Precomputes embeddings for all stored general schemas (both headers
+; and contents) and dumps to a CSV file for future use.
+;
+  (let (headers headers-str predicates-str facts facts-str)
+    ; Embed schema headers
+    (setq headers (mapcar (lambda (schema) (car (schema-header schema))) schemas))
+    (setq headers-str (mapcar #'expr-to-str headers))
+    (setq predicates-str (mapcar #'string (mapcar #'schema-predicate schemas)))
+    (information-retrieval:embed-documents headers-str
+      :filename (get-io-path "embeddings/schema-headers.csv")
+      :api-key (get-api-key "huggingface")
+      :indices predicates-str)
+    
+    ; Embed schema contents
+    (dolist (schema schemas)
+      (setq facts (get-schema-sections-wffs schema
+        '(:types :rigid-conds :static-conds :preconds :postconds :goals :episodes)))
+      (setq facts-str (mapcar #'expr-to-str facts))
+      (information-retrieval:embed-documents facts-str
+        :filename (get-io-path (format nil "embeddings/schemas/~a.csv" (string (schema-predicate schema))))
+        :api-key (get-api-key "huggingface")))
+)) ; END precompute-schema-embeddings
 
 
 
@@ -3495,10 +3616,46 @@
 ;
   (coerce
     (information-retrieval:retrieve text
-      :filename (get-io-path "knowledge_embedded.csv")
-      :api-key (get-api-key "huggingface"))
+      :filename (get-io-path "embeddings/knowledge.csv")
+      :api-key (get-api-key "huggingface")
+      :n n)
     'list)
 ) ; END retrieve-relevant-knowledge-from-kb
+
+
+
+(defun retrieve-relevant-epi-schemas (text &optional (n 1))
+;`````````````````````````````````````````````````````````````
+; Retrieves the n most relevant epi-schemas to an input text from
+; the set of general schemas, based on their schema headers (assuming
+; that the schemas have been previously embedded and stored in a CSV file).
+;
+  (let (schema-predicates)
+    (setq schema-predicates (mapcar #'intern (coerce
+      (information-retrieval:retrieve text
+        :filename (get-io-path "embeddings/schema-headers.csv")
+        :api-key (get-api-key "huggingface")
+        :indices t
+        :n n)
+      'list)))
+    (mapcar #'get-stored-schema schema-predicates)
+)) ; END retrieve-relevant-epi-schemas
+
+
+
+(defun retrieve-relevant-schema-facts (text schema &optional (n 3))
+;``````````````````````````````````````````````````````````````````
+; Retrieves the n most relevant facts contained within a given schema
+; to an input text (assuming that the schema contents have been previously
+; embedded and stored in a CSV file).
+;
+  (coerce
+    (information-retrieval:retrieve text
+      :filename (get-io-path (format nil "embeddings/schemas/~a.csv" (string (schema-predicate schema))))
+      :api-key (get-api-key "huggingface")
+      :n n)
+    'list)
+) ; END retrieve-relevant-schema-facts
 
 
 
