@@ -3366,7 +3366,7 @@
     )
 
     ; Get relevant habitual/event schema knowledge
-    (when (member 'epi-schemas types)
+    (when (and (member 'epi-schemas types) (member "information-retrieval" *dependencies* :test #'string-equal))
       (setq relevant-epi-schemas (reverse (retrieve-relevant-epi-schemas query-str)))
 
       (format t "~%  * Generating response using retrieved epi-schemas~%      (from \"~a\"):~%   <~a> "
@@ -3381,7 +3381,7 @@
     )
 
     ; Get relevant episodic memory
-    (when (member 'memory types)
+    (when (and (member 'memory types) (member "information-retrieval" *dependencies* :test #'string-equal))
       (setq relevant-memory (reverse (retrieve-relevant-knowledge-from-kb query-str)))
 
       (format t "~%  * Generating response using retrieved facts~%      (from \"~a\"):~%   ~a " query-str relevant-memory) ; DEBUGGING
