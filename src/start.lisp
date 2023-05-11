@@ -56,6 +56,8 @@
     (ensure-directories-exist "./logs/logs_out/gist/")
     (ensure-directories-exist "./logs/logs_out/semantic/")
     (ensure-directories-exist "./logs/logs_out/pragmatic/"))
+  (ensure-directories-exist (get-io-path "embeddings/"))
+  (ensure-directories-exist (get-io-path "embeddings/schemas/"))
 
   ; Ensure all standard input & output files for registered subsystems exist and are empty
   ; Note: input files only created for non-terminal systems,
