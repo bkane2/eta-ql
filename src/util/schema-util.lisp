@@ -22,8 +22,6 @@
 ;; 
 ;;
 
-(in-package :eta)
-
 ;`````````````````````````````````````````````````````
 ; Store a global hash table of episode schema headers to
 ; the corresponding schema structures.
@@ -50,6 +48,93 @@
   header
   contents
 ) ; END defstruct schema
+
+
+
+(defstruct (dial-schema (:include schema))
+;```````````````````````````````````````````
+; contains the following fields:
+; types             : the nominal types of each participant/variable
+; rigid-conds       : non-fluent conditions relevant to episode
+; static-conds      : fluent conditions that are not expected to change during episode
+; preconds          : fluent conditions that are expected to hold at the beginning of episode
+; postconds         : fluent conditions that are expected to hold at end of episode
+; goals             : goals of participants in schema (e.g., (^me want.v (that ...)))
+; episodes          : the expected/intended sub-episodes of the schema episode
+; episode-relations : the temporal/causal relations between episodes of schema
+; obligations       : dialogue obligations associated with particular episodes
+; necessities       : probabilities associated with schema formulas
+; certainties       : probabilities associated with schema episodes
+;
+  types
+  rigid-conds
+  static-conds
+  preconds
+  postconds
+  goals
+  episodes
+  episode-relations
+  obligations
+  necessities
+  certainties
+) ; END defstruct dial-schema
+
+
+
+(defun deepcopy-dial-schema (old &key keep-id)
+;```````````````````````````````````````````````
+; Deep copy an episode schema structure
+;
+  (let (new)
+    (if keep-id
+      (setq new (make-dial-schema :id (schema-id old)))
+      (setq new (make-dial-schema)))
+    (setf (dial-schema-predicate new) (copy-tree (dial-schema-predicate old)))
+    (setf (dial-schema-participants new) (copy-tree (dial-schema-participants old)))
+    (setf (dial-schema-vars new) (copy-tree (dial-schema-vars old)))
+    (setf (dial-schema-bindings new) (deepcopy-hash-table (dial-schema-bindings old)))
+    (setf (dial-schema-contents new) (copy-tree (dial-schema-contents old)))
+    (setf (dial-schema-header new) (copy-tree (dial-schema-header old)))
+    (setf (dial-schema-types new) (copy-tree (dial-schema-types old)))
+    (setf (dial-schema-rigid-conds new) (copy-tree (dial-schema-rigid-conds old)))
+    (setf (dial-schema-static-conds new) (copy-tree (dial-schema-static-conds old)))
+    (setf (dial-schema-preconds new) (copy-tree (dial-schema-preconds old)))
+    (setf (dial-schema-postconds new) (copy-tree (dial-schema-postconds old)))
+    (setf (dial-schema-goals new) (copy-tree (dial-schema-goals old)))
+    (setf (dial-schema-episodes new) (copy-tree (dial-schema-episodes old)))
+    (setf (dial-schema-episode-relations new) (copy-tree (dial-schema-episode-relations old)))
+    (setf (dial-schema-obligations new) (copy-tree (dial-schema-obligations old)))
+    (setf (dial-schema-necessities new) (copy-tree (dial-schema-necessities old)))
+    (setf (dial-schema-certainties new) (copy-tree (dial-schema-certainties old)))
+    new
+)) ; END deepcopy-dial-schema
+
+
+
+(defun store-dial-schema (predicate schema-contents)
+;````````````````````````````````````````````````````
+; Given a predicate for an dial-schema and the schema (as a list of sections),
+; create a new schema structure and store it in the global schema hash table,
+; with the predicate as a key.
+;
+  (let (schema header participants vars)
+    (push (list :predicate predicate) schema)
+    (setq header (car (get-keyword-contents schema-contents '(:header))))
+    (push (list :participants (remove 'set-of (remove predicate (butlast (flatten header) 2)))) schema)
+    (push (list :vars (remove-duplicates (remove-if-not #'variable? (flatten schema-contents)))) schema)
+    (push (list :contents schema-contents) schema)
+
+    ; schema sections
+    (push (list :header header) schema)
+    (dolist (section '(:types :rigid-conds :static-conds :preconds :postconds :goals
+                       :episodes :episode-relations :obligations :necessities :certainties))
+      (let ((section-contents (car (get-keyword-contents schema-contents (list section)))))
+        (when section-contents
+          (push (list section section-contents) schema))))
+
+    (setf (gethash predicate *schemas*)
+      (apply #'make-dial-schema (apply #'append schema)))
+)) ; END store-dial-schema
 
 
 
@@ -213,6 +298,8 @@
 ; Stores a schema as either an epi-schema or obj-schema.
 ;
   (cond
+    ((equal (car schema-contents) 'dial-schema)
+      (store-dial-schema predicate schema-contents))
     ((member (car schema-contents) '(event-schema epi-schema))
       (store-epi-schema predicate schema-contents))
     ((equal (car schema-contents) 'obj-schema)
@@ -226,9 +313,10 @@
 ;`````````````````````````````````````````````
 ; Deep copy a schema structure.
 ;
-  (if (epi-schema-p schema)
-    (deepcopy-epi-schema schema :keep-id keep-id)
-    (deepcopy-obj-schema schema :keep-id keep-id))
+  (cond
+    ((dial-schema-p schema) (deepcopy-dial-schema schema :keep-id keep-id))
+    ((epi-schema-p schema) (deepcopy-epi-schema schema :keep-id keep-id))
+    ((obj-schema-p schema) (deepcopy-obj-schema schema :keep-id keep-id)))
 ) ; END deepcopy-schema
 
 
@@ -262,6 +350,23 @@
 ;
   (gethash predicate *schemas*)
 ) ; END get-stored-schema
+
+
+
+(defun get-schemas-of-type (type)
+;```````````````````````````````````
+; Gets all stored schemas of a particular type.
+;
+  (let (schemas)
+    (maphash (lambda (predicate schema)
+        (when (or
+            (and (equal type 'dial-schema) (dial-schema-p schema))
+            (and (equal type 'epi-schema)  (epi-schema-p schema))
+            (and (equal type 'obj-schema)  (obj-schema-p schema)))
+          (push schema schemas)))
+      *schemas*)
+    schemas
+)) ; END get-schemas-of-type
 
 
 
@@ -361,32 +466,48 @@
 
 
 
-(defun get-schema-section (schema section &key (type 'epi) no-binding)
+(defun get-schema-section (schema section &key no-binding)
 ;````````````````````````````````````````````````````````````````````````
 ; Gets a section of a schema by the given keyword (substituting any bindings).
 ; (if :no-binding t is given, do not substitute bindings)
 ;
-  (if no-binding
-    (funcall (sym-join (list type 'schema section) #\-) schema)
-    (subst-binding-expr (funcall (sym-join (list type 'schema section) #\-) schema) schema))
-) ; END get-schema-section
+  (let (type)
+    (setq type (cond
+      ((dial-schema-p schema) 'dial)
+      ((epi-schema-p schema) 'epi)
+      ((obj-schema-p schema) 'obj)))
+    (if no-binding
+      (funcall (sym-join (list type 'schema section) #\-) schema)
+      (subst-binding-expr (funcall (sym-join (list type 'schema section) #\-) schema) schema))
+)) ; END get-schema-section
 
 
 
-(defun get-schema-section-wffs (schema section &key (type 'epi) no-binding)
+(defun get-schema-section-wffs (schema section &key no-binding)
 ;``````````````````````````````````````````````````````````````````````````````
 ; Gets all wffs in a section of a schema by the given keyword (substituting any bindings).
 ; (if :no-binding t is given, do not substitute bindings)
 ;
   (mapcar #'second (group-facts-in-schema-section
-    (get-schema-section schema section :type type :no-binding no-binding)))
+    (get-schema-section schema section :no-binding no-binding)))
 ) ; END get-schema-section-wffs
 
 
 
-(defun instantiate-epi-schema (schema args)
+(defun get-schema-sections-wffs (schema sections &key no-binding)
+;````````````````````````````````````````````````````````````````````````````````
+; Gets and appends all wffs in a list of sections of a schema.
+;
+  (apply #'append (mapcar (lambda (section)
+      (get-schema-section-wffs schema section :no-binding no-binding))
+    sections))
+) ; END get-schema-sections-wffs
+
+
+
+(defun instantiate-dial-schema (schema args)
 ;```````````````````````````````````````````
-; Instantiates a general epi-schema given a list of arguments corresponding to the
+; Instantiates a general dial-schema given a list of arguments corresponding to the
 ; variables in the schema header. This creates a copy of the general schema with
 ; specific variable bindings. It also adds certain inferences to the dialogue context,
 ; specifically those from the :types and :rigid-conds within the schema.
@@ -397,18 +518,18 @@
 ; TODO: should ?e be instantiated and (<schema-header> ** E1) be
 ; stored in context at this point?
 ;
-  (let ((schema-instance (deepcopy-epi-schema schema)))
+  (let ((schema-instance (deepcopy-dial-schema schema)))
     (bind-schema-args args schema-instance)
 
-    (instantiate-epi-schema-types schema)
-    (instantiate-epi-schema-rigid-conds schema)
+    (instantiate-dial-schema-types schema)
+    (instantiate-dial-schema-rigid-conds schema)
 
     schema-instance
-)) ; END instantiate-epi-schema
+)) ; END instantiate-dial-schema
 
 
 
-(defun instantiate-epi-schema-types (schema)
+(defun instantiate-dial-schema-types (schema)
 ;`````````````````````````````````````````````
 ; Adds the instantiated types within a schema to context.
 ; If the subject of a type predication is a variable, we create a skolem constant for that
@@ -432,11 +553,11 @@
         (setq wff (subst sk-name var wff)))
       ; Store type as fact in context.
       (store-in-context wff))
-)) ; END instantiate-epi-schema-types
+)) ; END instantiate-dial-schema-types
 
 
 
-(defun instantiate-epi-schema-rigid-conds (schema)
+(defun instantiate-dial-schema-rigid-conds (schema)
 ;``````````````````````````````````````````````````````
 ; Adds the instantiated rigid-conds within a schema to context.
 ; USES DS
@@ -446,7 +567,7 @@
       (setq name (first pair))
       (setq wff (second pair))
       (store-in-context wff))
-)) ; END instantiate-epi-schema-rigid-conds
+)) ; END instantiate-dial-schema-rigid-conds
 
 
 
