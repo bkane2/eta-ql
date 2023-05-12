@@ -1177,16 +1177,16 @@
 
 
 
-(defun tag-emotions (resp)
-;````````````````````````````
+(defun tag-emotions (resp emotion-mode)
+;`````````````````````````````````````````
 ; Prepends each response utterance with a default [NEUTRAL] tag unless it
-; already has an explicit emotion tag. If *emotions* is NIL, strip
+; already has an explicit emotion tag. If emotion-mode is NIL, strip
 ; all emotion tags from response, otherwise return tagged response.
 ; Also remove non-emotion tags (at the moment)
 ;
   (let ((tagged-resp (if (some #'emotion-tag? resp) resp (cons '[NEUTRAL] resp))))
     (remove-unsupported-tags
-      (if *emotions* tagged-resp (remove-if #'emotion-tag? tagged-resp)))
+      (if emotion-mode tagged-resp (remove-if #'emotion-tag? tagged-resp)))
 )) ; END tag-emotions
 
 
@@ -1233,7 +1233,7 @@
 ;````````````````````````````
 ; Gets the emotion of a response from the tag, as a string.
 ;
-  (if *emotions*
+  (if (emotion-tag? (car resp))
     (string-downcase (implode (cdr (butlast (explode (car resp))))))
     "neutral")
 ) ; END get-emotion
@@ -3020,8 +3020,81 @@
 
 
 
-(defun expr-to-words (expr)
-;````````````````````````````
+(defun subst-indexical-pronouns1 (ulf ^me ^you)
+;``````````````````````````````````````````````````
+; Wrapper function for subst-indexical-pronouns
+;
+  (first (subst-indexical-pronouns ulf ^me ^you))
+) ; END subst-indexical-pronouns1
+
+
+
+(defun subst-indexical-pronouns (ulf ^me ^you &key me-pron you-pron)
+;``````````````````````````````````````````````````````````````````````
+; Replace indexical variables ^me and ^you in a ULF with either the shortname
+; of the corresponding agent, or the appropriate anaphoric pronoun if the name
+; has previously been used.
+;
+; TODO: this function is a bit messy; it should be optimized in the future.
+;
+  (cond
+    ; If ^me is encountered as an object (non-car of a list),
+    ; replace with them/her/him (if anaphoric) or the value of ^me.
+    ((equal ulf '^me)
+      (list (if me-pron
+        (get-pron-case ^me 'obj)
+        (intern (shortname ^me :handle-acronyms t)))
+      t you-pron))
+    ; If ^you is encountered as an object (non-car of a list),
+    ; replace with them/her/him (if anaphoric) or the value of ^you.
+    ((equal ulf '^you)
+      (list (if you-pron
+        (get-pron-case ^you 'obj)
+        (intern (shortname ^you :handle-acronyms t)))
+      me-pron t))
+    ; Non-indexical atom.
+    ((atom ulf)
+      (list ulf me-pron you-pron))
+    ; If ^me is encountered as a subject (car of a list),
+    ; replace with they/she/he (if anaphoric) or the value of ^me.
+    ((equal (car ulf) '^me)
+      (list (cons (if me-pron
+              (get-pron-case ^me 'subj)
+              (intern (shortname ^me :handle-acronyms t)))
+        (first (subst-indexical-pronouns (cdr ulf) ^me ^you :me-pron t :you-pron you-pron)))
+      t you-pron))
+    ; If ^you is encountered as a subject (car of a list),
+    ; replace with they/she/he (if anaphoric) or the value of ^you.
+    ((equal (car ulf) '^you)
+      (list (cons (if you-pron
+              (get-pron-case ^you 'subj)
+              (intern (shortname ^you :handle-acronyms t)))
+        (first (subst-indexical-pronouns (cdr ulf) ^me ^you :me-pron me-pron :you-pron t)))
+      me-pron t))
+    ; If possessive subject with ^me and anaphoric, replace with their/her/his.
+    ((and (equal (car ulf) '(^me 's)) me-pron)
+      (list (cons (get-pron-case ^me 'poss)
+        (first (subst-indexical-pronouns (cdr ulf) ^me ^you :me-pron t :you-pron you-pron)))
+      t you-pron))
+    ; If possessive subject with ^you and anaphoric, replace with their/her/his.
+    ((and (equal (car ulf) '(^you 's)) you-pron)
+      (list (cons (get-pron-case ^you 'poss)
+        (first (subst-indexical-pronouns (cdr ulf) ^me ^you :me-pron me-pron :you-pron t)))
+      me-pron t))
+    ; Otherwise, recur on each element in list
+    (t (list (mapcar (lambda (part)
+        (let ((result (subst-indexical-pronouns part ^me ^you :me-pron me-pron :you-pron you-pron)))
+          (setq me-pron (second result))
+          (setq you-pron (third result))
+          (first result)))
+        ulf)
+      me-pron you-pron)))
+) ; END subst-indexical-pronouns
+
+
+
+(defun expr-to-words (expr &key ^me ^you)
+;``````````````````````````````````````````````````````````````
 ; Converts an expression (which may already be
 ; a quoted wordlist) to a quoted wordlist.
 ; 
@@ -3029,43 +3102,50 @@
     ((atom expr) (list expr))
     ((quoted-sentence? expr) (second expr))
     ((sentence? expr) expr)
-    (t (mapcar (lambda (word) (if (equal word '^me) (shortname *^me*) word)) wordlist)))
+    (t 
+      (if ^me
+        (mapcar (lambda (word) (if (equal word '^me) (intern (shortname ^me)) word)) expr)
+        expr)))
 ) ; END expr-to-words
 
 
 
-(defun expr-to-str (expr)
-;```````````````````````````
+(defun expr-to-str (expr &key ^me ^you)
+;`````````````````````````````````````````````````````````````
 ; Converts an expression (which is either a
 ; word list or ULF) to a string.
 ; 
   (cond
     ((atom expr) (string expr))
-    ((sentence? expr) (words-to-str expr))
-    (t (ulf-to-str expr)))
+    ((stringp expr) (if ^me (str-replace expr "^me" (shortname ^me)) expr))
+    ((sentence? expr) (words-to-str expr :^me ^me :^you ^you))
+    (t (ulf-to-str expr :^me ^me :^you ^you)))
 ) ; END expr-to-str
 
 
 
-(defun words-to-str (wordlist)
-;````````````````````````````````
+(defun words-to-str (wordlist &key ^me ^you)
+;``````````````````````````````````````````````````````````````````
 ; Converts a list of word symbols to a string.
 ;
   (let (ret)
-    (setq wordlist
-      (mapcar (lambda (word) (if (equal word '^me) (shortname *^me*) word)) wordlist))
+    (when ^me
+      (setq wordlist
+        (mapcar (lambda (word) (if (equal word '^me) (shortname ^me) word)) wordlist)))
     (setq ret (format nil "~{~a ~}" wordlist))
     (standardize-case+punctuation ret)
 )) ; END words-to-str
 
 
 
-(defun ulf-to-str (ulf)
-;```````````````````````````
+(defun ulf-to-str (ulf &key ^me ^you)
+;```````````````````````````````````````````````````````````
 ; Converts a ULF to a string, replacing indexical
 ; pronouns and possessives.
 ;
-  (ulf2english:ulf2english (preprocess-ulf-pronouns-for-prompt1 ulf))
+  (ulf2english:ulf2english (if (and ^me ^you)
+    (subst-indexical-pronouns1 ulf ^me ^you)
+    ulf))
 ) ; END ulf-to-str
 
 

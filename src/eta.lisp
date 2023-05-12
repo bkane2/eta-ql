@@ -57,9 +57,9 @@
 ; contains the following fields:
 ; avatar                : specify the name of one of the available avatars to use
 ; avatar-name           : the full name of the avatar to use
-; subsystems-perception : A list of perception subsystems registered with Eta.
+; perception-servers    : A list of perception subsystems registered with Eta.
 ;                         Supported: |Audio|, |Terminal|, |Blocks-World-System|
-; subsystems-specialist : A list of specialist subsystems registered with Eta.
+; specialist-servers    : A list of specialist subsystems registered with Eta.
 ;                         Supported: |Spatial-Reasoning-System|
 ; emotion-tags          : T to allow insertion of emotion tags (e.g., [SAD]) at beginning
 ;                              of outputs. If no emotion tag is explicitly specified in the output,
@@ -87,8 +87,8 @@
 ;
   (avatar "lissa-gpt")
   (avatar-name "Eta")
-  (subsystems-perception '(|Audio| |Terminal|))
-  (subsystems-specialist '())
+  (perception-servers '(|Audio| |Terminal|))
+  (specialist-servers '())
   (emotion-tags NIL)
   (model-names '(("information-retrieval" ("sentence-transformer" "sentence-transformers/all-distilroberta-v1" :api t))))
   (generation-mode 'GPT3)
@@ -96,6 +96,53 @@
   (parser-mode 'RULE)
   (session-number 1)
 ) ; END defstruct agent-config
+
+
+
+
+;`````````````````````````````````````````````
+; Accessor functions for agent-config
+;
+
+(defun get-perception-servers (config-agent)
+  (agent-config-perception-servers config-agent)
+) ; END get-perception-servers
+
+(defun get-specialist-servers (config-agent)
+  (agent-config-specialist-servers config-agent)
+) ; END get-specialist-servers
+
+(defun get-model-names (config-agent)
+  (agent-config-model-names config-agent)
+) ; END get-model-names
+
+(defun is-emotion-mode (config-agent)
+  (agent-config-emotion-tags config-agent)
+) ; END is-emotion-mode
+
+(defun get-generation-mode (config-agent)
+  (agent-config-generation-mode config-agent)
+) ; END get-generation-mode
+
+(defun get-interpretation-mode (config-agent)
+  (agent-config-interpretation-mode config-agent)
+) ; END get-interpretation-mode
+
+(defun get-parser-mode (config-agent)
+  (agent-config-parser-mode config-agent)
+) ; END get-parser-mode
+
+(defun set-generation-mode (config-agent mode)
+  (setf (agent-config-generation-mode config-agent) mode)
+) ; END set-generation-mode
+
+(defun set-interpretation-mode (config-agent mode)
+  (setf (agent-config-interpretation-mode config-agent) mode)
+) ; END set-interpretation-mode
+
+(defun set-parser-mode (config-agent mode)
+  (setf (agent-config-parser-mode config-agent) mode)
+) ; END set-parser-mode
 
 
 
@@ -120,9 +167,23 @@
 (defstruct session
 ;```````````````````
 ; contains the following fields:
-; TODO
+; id                 : a unique ID for this session
+; config-agent       : a copy of the agent config struct
+; config-user        : a copy of the user config struct
+; ds                 : the dialogue state of this session
+; io-path            : the io-path of this session
+; ^me                : the value for the indexical variable ^me
+; ^you               : the value for the indexical variable ^you
+; output-count       : used for keeping track of output number in output.txt
+; output-buffer      : used for maintaining a buffer of consecutive Eta
+;                      outputs so that they can be combined and written
+;                      as a single turn to turn-output.txt
+; step-failure-timer : used to keep track of elapsed time for determining whether
+;                      a step in the plan has failed
+; quit-conversation  : a true/false flag used to determine when this session
+;                      should be closed
 ;
-  (session-id (gentemp "SESSION"))
+  (id (gentemp "SESSION"))
   config-agent
   config-user
   ds
@@ -131,9 +192,74 @@
   ^you
   output-count
   output-buffer
-  expected-step-failure-timer
+  step-failure-timer
   quit-conversation
 ) ; END defstruct session
+
+
+
+
+
+;`````````````````````````````````````````````
+; Accessor functions for session (uses list of
+; sessions stored in global *sessions* var).
+;
+
+(defun get-io-path (&optional fname)
+  (if *sessions* (concatenate 'string (session-io-path (car *sessions*)) fname))
+) ; END get-io-path
+
+(defun get-ds ()
+  (if *sessions* (session-ds (car *sessions*)))
+) ; END get-ds
+
+(defun get-^me ()
+  (if *sessions* (session-^me (car *sessions*)))
+) ; END get-^me
+
+(defun get-^you ()
+  (if *sessions* (session-^you (car *sessions*)))
+) ; END get-^you
+
+(defun get-output-count ()
+  (if *sessions* (session-output-count (car *sessions*)))
+) ; END get-output-count
+
+(defun get-output-buffer ()
+  (if *sessions* (session-output-buffer (car *sessions*)))
+) ; END get-output-buffer
+
+(defun get-step-failure-timer ()
+  (if *sessions* (session-step-failure-timer (car *sessions*)))
+) ; END get-step-failure-timer
+
+(defun get-quit-conversation ()
+  (if *sessions* (session-quit-conversation (car *sessions*)))
+) ; END get-quit-conversation
+
+(defun has-plan ()
+  (if *sessions* (ds-curr-plan (session-ds (car *sessions*))))
+) ; END has-plan
+
+(defun set-output-count (count)
+  (if *sessions* (setf (session-output-count (car *sessions*)) count))
+) ; END set-output-count
+
+(defun set-output-buffer (buffer)
+  (if *sessions* (setf (session-output-buffer (car *sessions*)) buffer))
+) ; END set-output-buffer
+
+(defun push-output-buffer (x)
+  (if *sessions* (push x (session-output-buffer (car *sessions*))))
+) ; END push-output-buffer
+
+(defun set-step-failure-timer (time)
+  (if *sessions* (setf (session-step-failure-timer (car *sessions*)) time))
+) ; END set-step-failure-timer
+
+(defun set-quit-conversation (quit-conversation)
+  (if *sessions* (setf (session-quit-conversation (car *sessions*)) quit-conversation))
+) ; END set-quit-conversation
 
 
 
@@ -143,17 +269,43 @@
 ;```````````````````````````````````````````````
 ; Initializes a dialogue session given user configuration
 ;
-  (let ((session (make-session)))
+  (let ((session (make-session)) start-schema)
     (setf (session-config-agent session) config-agent)
     (setf (session-config-user session) config-user)
     (setf (session-ds session) (init-ds))
-    ;; (setf (session-io-path session) ()) ; TODO
+    (setf (session-io-path session)
+      (concatenate 'string *io-dir* (agent-config-avatar config-agent) "/" (string (session-id session)) "/"))
     (setf (session-^me session) (intern (agent-config-avatar-name config-agent)))
     (setf (session-^you session) (intern (user-config-user-name config-user)))
     (setf (session-output-count session) 0)
     (setf (session-output-buffer session) nil)
-    (setf (session-expected-step-failure-timer session) (get-universal-time))
-    (setf (session-quit-conversation) nil)
+    (setf (session-step-failure-timer session) (get-universal-time))
+    (setf (session-quit-conversation session) nil)
+
+    ; Add any pre-defined aliases and concept sets to session
+    (when (boundp '*concept-aliases*)
+      (mapcar (lambda (alias)
+          (store-aliases-of-concept (first alias) (second alias) (third alias) (session-ds session)))
+        *concept-aliases*))
+    (when (boundp '*concept-sets*)
+      (mapcar (lambda (set)
+          (store-concept-set (first set) (second set) (third set) (session-ds session)))
+        *concept-sets*))
+
+    ; Add any initial knowledge to session
+    (when (boundp '*init-knowledge*)
+      (mapcar (lambda (fact) (store-in-kb fact (session-ds session))) *init-knowledge*))
+
+    ; Create plan from initial schema (if doesn't exist, set quit-conversation to t)
+    (setq start-schema (user-config-start-schema config-user))
+    (when (null (get-stored-schema start-schema))
+      (format t "***  start schema for session ~a not found. Quitting conversation.~%" (session-id session))
+      (setf (session-quit-conversation session) t)
+      (return-from init-session session))
+    (setf (ds-curr-plan (session-ds session)) (plan-subschema start-schema nil (session-ds session)))
+
+    ;; (print-plan-status (ds-curr-plan (session-ds session))) ; DEBUGGING
+
     session
 )) ; END init-session
 
@@ -401,32 +553,10 @@
     evict-buffers
   ))
 
-  ; Global variable for dialogue record structure
-  (defparameter *ds* (init-ds))
+  (defvar *io-dir* "./io/")
+  (defparameter *embedding-path* (concatenate 'string *io-dir* "/" (agent-config-avatar *config-agent*) "/embeddings/"))
 
-  ; Global variable used to exit conversation when t
-  (defparameter *quit-conversation* nil)
-
-  ; Set indexical variables
-  (defparameter *^me*
-    (if (and (boundp '*avatar-name*) *avatar-name*) (intern *avatar-name*) 'Eta))
-  (defparameter *^you*
-    (if (and (boundp '*user-name*) *user-name*) (intern *user-name*) '|John Doe|))
-
-  ; Process any pre-defined aliases and concept sets
-  (when (boundp '*concept-aliases*)
-    (mapcar (lambda (alias) (store-aliases-of-concept (first alias) (second alias) (third alias) *ds*))
-      *concept-aliases*))
-  (when (boundp '*concept-sets*)
-    (mapcar (lambda (set) (store-concept-set (first set) (second set) (third set) *ds*))
-      *concept-sets*))
-
-  ; Load initial knowledge (if any)
-  (when (boundp '*init-knowledge*)
-    (mapcar (lambda (fact) (store-in-kb fact *ds*)) *init-knowledge*)
-    ; Embed and dump initial knowledge
-    (precompute-knowledge-embeddings *init-knowledge*)
-    (precompute-schema-embeddings (get-schemas-of-type 'epi-schema)))
+  (create-process-io-files)
 
   ; Coreference mode
   ; 0 : simply reconstruct the original ulf
@@ -446,18 +576,6 @@
   ; A list of supported speech acts
   (defparameter *speech-acts* '(say-to.v paraphrase-to.v reply-to.v react-to.v))
 
-  ; Used for keeping track of output number in output.txt.
-  (defparameter *output-count* 0)
-
-  ; Used for maintaining a buffer of consecutive Eta outputs so that they can be combined and
-  ; written as a single turn to turn-output.txt
-  (defparameter *output-buffer* nil)
-
-  ; Timer parameters. Each end up being set to current system time, meaning
-  ; that time elapsed can be calculated by comparing the timer values to the
-  ; system time at a future point.
-  (defparameter *expected-step-failure-timer* (get-universal-time))
-
   ; The certainty of an episode determines the timer period (in seconds) that must be
   ; passed for Eta to consider an expected episode failed and move on in the plan.
   ; This is a function on the certainty of the episode, with a certainty of 1 having
@@ -467,18 +585,16 @@
   (defparameter *expected-step-failure-period-coefficient* 30)
 
   ; If *emotions* is T, Eta will allow use of emotion tags at beginning of outputs.
-  (defparameter *emotions* nil)
+  ;; (defparameter *emotions* nil)
   (defparameter *emotions-list* '([NEUTRAL] [SAD] [HAPPY] [WORRIED] [ANGRY]))
-
-  ; A list of any registered perception subsystems that Eta needs to listen to.
-  ; Currently only supports '|Blocks-World-System|, '|Terminal|, and '|Audio|.
-  (defparameter *registered-systems-perception* nil)
-  ; A list of any registered specialist subsystems that Eta can interact with.
-  ; Currently only supports '|Spatial-Reasoning-System|.
-  (defparameter *registered-systems-specialist* nil)
 
   ; Global variables used for IO
   (defparameter *input* nil)
+
+  ; Precompute embeddings for any init-knowledge and epi-schemas
+  (when (boundp '*init-knowledge*)
+    (precompute-knowledge-embeddings *init-knowledge* *embedding-path*))
+  (precompute-schema-embeddings (get-schemas-of-type 'epi-schema) *embedding-path*)
 
 ) ; END init
 
@@ -492,35 +608,35 @@
 
 
 
-(defun validate-dependencies (parser response-generator gist-interpreter)
+(defun validate-dependencies (response-generator gist-interpreter parser)
 ;```````````````````````````````````````````````````````````````````````````
 ; Validates that the dependencies given to Eta are correct, and initializes
 ; some packages to prevent latency upon first invocation.
 ;
-  (setq *parser*
+  (setq parser
     (if (member parser '(BLLIP RULE)) parser 'RULE))
-  (setq *response-generator*
+  (setq response-generator
     (if (member response-generator '(GPT3 RULE)) response-generator 'RULE))
-  (setq *gist-interpreter*
+  (setq gist-interpreter
     (if (member gist-interpreter '(GPT3 RULE)) gist-interpreter 'RULE))
 
   ; Check for API key if using gpt3-shell
-  (when (or (equal *response-generator* 'GPT3) (equal *gist-interpreter* 'GPT3))
+  (when (or (equal response-generator 'GPT3) (equal gist-interpreter 'GPT3))
     (when (null (get-api-key "openai"))
       (format t "~% --- Warning: GPT3 generation/interpretation mode requires a valid")
       (format t "~%              OpenAI API key to be provided in config/keys/openai.txt.")
       (format t "~%              Changing generation/interpretation mode to RULE.~%")
-      (setq *response-generator* 'RULE)
-      (setq *gist-interpreter* 'RULE)))
+      (setq response-generator 'RULE)
+      (setq gist-interpreter 'RULE)))
 
   ; Initialize gpt3-shell (if in GPT3 generation/interpretation mode and valid API key exists)
   ; NOTE: currently unused because the API key is passed as an argument to the generation function.
-  ;; (when (or (equal *response-generator* 'GPT3) (equal *gist-interpreter* 'GPT3))
+  ;; (when (or (equal response-generator 'GPT3) (equal gist-interpreter 'GPT3))
   ;;   (gpt3-shell:init (get-api-key "openai")))
 
   ; Initialize information-retrieval (prevents delay on first invocation), and set
   ; correct model paths if custom model paths are given
-  (dolist (model *model-names*)
+  (dolist (model (get-model-names *config-agent*))
     (when (equal (car model) "information-retrieval")
       (dolist (submodel (cdr model))
         (when (equal '(:api t) (member :api submodel))
@@ -539,8 +655,12 @@
   (ulf2english:ulf2english '(this.pro ((pres be.v) (= (a.d (test.n |ULF|.n))))))
 
   ; Initialize lenulf if among dependencies (prevents delay on first invocation)
-  (when (equal *parser* 'BLLIP)
+  (when (equal parser 'BLLIP)
     (parse-str-to-ulf-bllip "This is a test sentence."))
+
+  (set-generation-mode *config-agent* response-generator)
+  (set-interpretation-mode *config-agent* gist-interpreter)
+  (set-parser-mode *config-agent* parser)
 
 ) ; END validate-dependencies
 
@@ -548,9 +668,7 @@
 
 
 
-(defun eta (&key (subsystems-perception '(|Terminal| |Audio|)) (subsystems-specialist '())
-                 (model-names nil) (response-generator 'RULE) (gist-interpreter 'RULE)
-                 (parser 'RULE) (emotions nil)) ; {@}
+(defun eta (agent-config)
 ;``````````````````````````````````````````````````````````````````````````````````````````````````````````
 ; Main program: Originally handled initial and final formalities,
 ; (now largely commented out) and controls the loop for producing,
@@ -558,34 +676,134 @@
 ; annotating inputs & producing outputs, but with some subplan
 ; formation, gist clause formation, etc.).
 ;
-  (setq *model-names* model-names)
-  (validate-dependencies parser response-generator gist-interpreter)
+  (defparameter *config-agent* agent-config)
+
+  (validate-dependencies
+    (get-generation-mode *config-agent*)
+    (get-interpretation-mode *config-agent*)
+    (get-parser-mode *config-agent*))
 
   (init)
-  (setq *registered-systems-perception* subsystems-perception)
-  (setq *registered-systems-specialist* subsystems-specialist)
-  (setq *emotions* emotions)
-  (setf (ds-count *ds*) 0) ; Number of outputs so far
 
-  ; If have-eta-dialog.v is not present in schema library, return an error
-  (when (null (get-stored-schema 'have-eta-dialog.v))
-    (format t "***  schema for have-eta-dialog.v not found. If using a multi-session avatar, make sure *session-number* is set.~%")
-    (return-from eta nil))
+  (defparameter *sessions* nil)
+  (defparameter *sessions-dequeue* nil)
 
-  ; Initiate the dialogue plan, beginning from the schema for have-eta-dialog.v
-  (setf (ds-curr-plan *ds*) (plan-subschema 'have-eta-dialog.v nil))
+  (format t "~% ==== ETA READY TO START REGISTERING SESSIONS~%")
 
-  ;; (print-plan-status (ds-curr-plan *ds*)) ; DEBUGGING
-
-  ; The interaction continues so long as the dialogue plan has a current step to execute
-  (loop while (and (ds-curr-plan *ds*) (not *quit-conversation*)) do
-    (do-task (select-and-remove-task)))
-
-  ; Write any final buffered output
-  (when *output-buffer*
-    (write-output-buffer))
+  ; Eta continues to monitor sessions indefinitely
+  (loop while t do
+    (cond
+      ; If the session queue is non-empty, attempt to do a single pending task for
+      ; that session, and dequeue. Remove the session if it is finished.
+      (*sessions*
+        (cond
+          ((and (has-plan) (not (get-quit-conversation)))
+            (do-task (select-and-remove-task))
+            (push (car *sessions*) *sessions-dequeue*))
+          ((get-output-buffer)
+            (write-output-buffer (get-output-buffer) (get-io-path))
+            (set-output-buffer nil)))
+        (setq *sessions* (cdr *sessions*)))
+      ; Once the session queue is empty, move all dequeued sessions back to queue and
+      ; add any newly registered sessions.
+      (t
+        (setq *sessions* (reverse *sessions-dequeue*))
+        (setq *sessions-dequeue* nil)
+        (listen-for-new-sessions))))
   
 ) ; END eta
+
+
+
+
+
+(defun listen-for-new-sessions ()
+;```````````````````````````````````
+; Listens for new sessions by reading the paths of new config files from
+; "/io/new-sessions.lisp", creating user-config structs, and initiating a new
+; session.
+;
+  (let (config-fnames config-user new-session)
+    (setq config-fnames (read-new-sessions (concatenate 'string *io-dir* "new-sessions.lisp")))
+    (dolist (config-fname config-fnames)
+      (setq config-user (apply #'make-user-config (read-config config-fname)))
+      (setq new-session (init-session *config-agent* config-user))
+      (create-session-io-files new-session)
+      (format t "~% == Adding new session ~a~%" (session-id new-session))
+      (push new-session *sessions*))
+)) ; END listen-for-new-sessions
+
+
+
+
+
+(defun create-process-io-files ()
+;````````````````````````````````
+; Creates io directories and files necessary to execute Eta.
+; 
+  (ensure-directories-exist *io-dir*)
+  (ensure-directories-exist (concatenate 'string *io-dir* (agent-config-avatar *config-agent*) "/"))
+  (ensure-directories-exist *embedding-path*)
+  (ensure-directories-exist (concatenate 'string *embedding-path* "schemas/"))
+  (with-open-file (outfile (concatenate 'string *io-dir* "new-sessions.lisp")
+    :direction :output :if-exists :supersede :if-does-not-exist :create))
+) ; END create-process-io-files
+
+
+
+
+
+(defun create-session-io-files (session)
+;```````````````````````````````````````
+; Creates fresh io directories and files for a new session.
+; 
+  (let ((path (session-io-path session))
+        (perception-servers (get-perception-servers (session-config-agent session)))
+        (specialist-servers (get-specialist-servers (session-config-agent session))))
+    (ensure-directories-exist path)
+    (ensure-directories-exist (concatenate 'string path "in/"))
+    (ensure-directories-exist (concatenate 'string path "out/"))
+    (ensure-directories-exist (concatenate 'string path "conversation-log/"))
+
+    ; Ensure all standard input & output files for registered subsystems exist and are empty
+    ; Note: input files only created for non-terminal systems,
+    ;       output files are only created for non-terminal and non-audio systems
+    (mapcar (lambda (system)
+      (let ((fname-in (if (not (member system '(|Terminal|)))
+                      (concatenate 'string path "in/" (string system) ".lisp")))
+            (fname-out (if (not (member system '(|Terminal| |Audio|)))
+                      (concatenate 'string path "out/" (string system) ".lisp"))))
+        (if fname-in
+        (with-open-file (outfile fname-in :direction :output :if-exists
+                                          :supersede :if-does-not-exist :create)))
+        (if fname-out
+        (with-open-file (outfile fname-out :direction :output :if-exists
+                                          :supersede :if-does-not-exist :create)))))
+      (append perception-servers specialist-servers))
+
+    ; Ensure that empty conversation log files exist
+    (with-open-file (outfile (concatenate 'string path "conversation-log/" "text.txt")
+      :direction :output :if-exists :supersede :if-does-not-exist :create))
+    (with-open-file (outfile (concatenate 'string path "conversation-log/" "text-readable.txt")
+      :direction :output :if-exists :supersede :if-does-not-exist :create))
+    (with-open-file (outfile (concatenate 'string path "conversation-log/" "gist.txt")
+      :direction :output :if-exists :supersede :if-does-not-exist :create))
+    (with-open-file (outfile (concatenate 'string path "conversation-log/" "semantic.txt")
+      :direction :output :if-exists :supersede :if-does-not-exist :create))
+    (with-open-file (outfile (concatenate 'string path "conversation-log/" "pragmatic.txt")
+      :direction :output :if-exists :supersede :if-does-not-exist :create))
+    (with-open-file (outfile (concatenate 'string path "conversation-log/" "obligations.txt")
+      :direction :output :if-exists :supersede :if-does-not-exist :create))
+
+    ; Delete the content of output.txt, if it exists, otherwise create
+    (with-open-file (outfile (concatenate 'string path "output.txt")
+      :direction :output :if-exists :supersede :if-does-not-exist :create))
+    ; Delete the content of turn-output.txt and turn-emotion.txt, otherwise create
+    (with-open-file (outfile (concatenate 'string path "turn-output.txt")
+      :direction :output :if-exists :supersede :if-does-not-exist :create))
+    (with-open-file (outfile (concatenate 'string path "turn-emotion.txt")
+      :direction :output :if-exists :supersede :if-does-not-exist :create))      
+)) ; END create-session-io-files
 
 
 
@@ -608,12 +826,12 @@
 ; task and update the queue, refilling the queue when empty.
 ;
   ; When the task queue is empty, refill
-  (when (null (ds-task-queue *ds*))
-    (refill-task-queue *ds*))
+  (when (null (ds-task-queue (get-ds)))
+    (refill-task-queue (get-ds)))
 
   ; Pop the current front of the task queue
-  (let ((curr-task (car (ds-task-queue *ds*))))
-    (setf (ds-task-queue *ds*) (cdr (ds-task-queue *ds*)))
+  (let ((curr-task (car (ds-task-queue (get-ds)))))
+    (setf (ds-task-queue (get-ds)) (cdr (ds-task-queue (get-ds))))
     curr-task)
 ) ; END select-and-remove-task
 
@@ -655,9 +873,9 @@
 ; Advances the dialogue plan to the next step, or signals to
 ; quit the conversation if there are no further steps.
 ;
-  (if (plan-node-next (ds-curr-plan *ds*))
-    (setf (ds-curr-plan *ds*) (plan-node-next (ds-curr-plan *ds*)))
-    (setq *quit-conversation* t))
+  (if (plan-node-next (ds-curr-plan (get-ds)))
+    (setf (ds-curr-plan (get-ds)) (plan-node-next (ds-curr-plan (get-ds))))
+    (set-quit-conversation t))
 ) ; END advance-plan
 
 
@@ -682,7 +900,7 @@
 ; TODO: ultimately, I think matching expectations in the plan
 ; and executing Eta actions should be separate tasks.
 ;
-  (let ((curr-step (plan-node-step (ds-curr-plan *ds*))) ep-name wff subj certainty advance-plan?)
+  (let ((curr-step (plan-node-step (ds-curr-plan (get-ds)))) ep-name wff subj certainty advance-plan?)
     (setq ep-name (get-step-ep-name curr-step))
     (setq wff (get-step-wff curr-step))
 
@@ -702,14 +920,14 @@
       ; Otherwise, treat step as expectation
       (t (setq advance-plan? (process-expected-step curr-step))))
 
-    ;; (print-plan-status (ds-curr-plan *ds*)) ; DEBUGGING
+    ;; (print-plan-status (ds-curr-plan (get-ds))) ; DEBUGGING
 
     ; If plan is to be advanced, reset the timer for checking whether to fail a step, and update the plan
     (when advance-plan?
-      (setq *expected-step-failure-timer* (get-universal-time))
+      (set-step-failure-timer (get-universal-time))
       (advance-plan))
 
-    ;; (print-plan-status (ds-curr-plan *ds*)) ; DEBUGGING
+    ;; (print-plan-status (ds-curr-plan (get-ds))) ; DEBUGGING
 
 )) ; END execute-curr-step
 
@@ -733,8 +951,8 @@
   ; Cycle through all registered perception sources;
   ; for each observation, instantiate an episode and
   ; any relevant temporal relations.
-    (dolist (system *registered-systems-perception*)
-      (setq inputs (read-from-system system))
+    (dolist (system (get-perception-servers *config-agent*))
+      (setq inputs (read-from-system system (get-io-path)))
 
       ;; (when inputs (format t "received inputs: ~a~%" inputs)) ; DEBUGGING
 
@@ -749,15 +967,15 @@
       ; to inferring the negation would be using a lexical resource,
       ; such as WordNet, which has mutual exclusion relations.
       (mapcar (lambda (input)
-        (when (equal 'not (car input)) (remove-old-contextual-fact (second input) *ds*))) inputs)
+        (when (equal 'not (car input)) (remove-old-contextual-fact (second input) (get-ds)))) inputs)
       (remove-if (lambda (input) (equal 'not (car input))) inputs)
 
       ; Add facts to context
-      (when inputs (setq ep-name-new (store-new-contextual-facts inputs *ds*)))
+      (when inputs (setq ep-name-new (store-new-contextual-facts inputs (get-ds))))
 
       ; Add facts to perceptions buffer for further interpretation
       (setq inputs (mapcar (lambda (input) (list ep-name-new input)) inputs))
-      (enqueue-in-buffer-ordered inputs (buffers-perceptions (ds-buffers *ds*))))
+      (enqueue-in-buffer-ordered inputs (buffers-perceptions (ds-buffers (get-ds)))))
 
 )) ; END perceive-world
 
@@ -770,11 +988,11 @@
 ; Given a list of enqueued perceptions, go through each one and interpret it
 ; in the context of the current (sub)plan (emptying the queue in the process).
 ;
-  (let ((curr-step (plan-node-step (ds-curr-plan *ds*))))
+  (let ((curr-step (plan-node-step (ds-curr-plan (get-ds)))))
 
     ; Pop each buffered perception and try to interpret each one in
     ; context of the current plan step
-    (dolist (fact (pop-all-from-buffer (buffers-perceptions (ds-buffers *ds*))))
+    (dolist (fact (pop-all-from-buffer (buffers-perceptions (ds-buffers (get-ds)))))
       (interpret-perception-in-context fact curr-step))
 
 )) ; END interpret-perceptions
@@ -803,12 +1021,12 @@
 ; TODO REFACTOR : ensure order of priority for gists/possible actions is correct
 ;
   (let (poss-actions gists)
-    (setq gists (mapcar #'second (purify-func (iterate-buffer (buffers-gists (ds-buffers *ds*))))))
+    (setq gists (mapcar #'second (purify-func (iterate-buffer (buffers-gists (ds-buffers (get-ds)))))))
 
     ; Form a reaction to each gist clause in the buffer (removing nil gists, unless they are
     ; the only gist present, in which case it may be possible to form a reaction to that)
     (setq poss-actions (remove nil (mapcar #'suggest-reaction-to-input gists)))
-    (enqueue-in-buffer-ordered poss-actions (buffers-actions (ds-buffers *ds*)))
+    (enqueue-in-buffer-ordered poss-actions (buffers-actions (ds-buffers (get-ds))))
 
 )) ; END suggest-possible-actions-from-input
 
@@ -852,13 +1070,13 @@
   (let (poss-action plan-node)
     ; For now, we assume that the system will only attempt to fit the most urgent
     ; action into the plan, and the rest will be evicted before the next task cycle
-    (setq poss-action (pop-item-from-buffer (buffers-actions (ds-buffers *ds*))))
+    (setq poss-action (pop-item-from-buffer (buffers-actions (ds-buffers (get-ds)))))
 
     ; If a possible action is found, insert new plan node and make it the currently due step
     (when poss-action 
       (setq plan-node
         (init-plan-from-episode-list (list :episodes (episode-var) poss-action)))
-      (setf (ds-curr-plan *ds*) (insert-before-plan-node (ds-curr-plan *ds*) plan-node)))
+      (setf (ds-curr-plan (get-ds)) (insert-before-plan-node (ds-curr-plan (get-ds)) plan-node)))
 
 )) ; END add-possible-actions-to-plan
 
@@ -878,10 +1096,10 @@
 ; certain contextual information in "real time". However, it seems that some steps may
 ; be able to be expanded at any point, even if not due yet.
 ; 
-  (let ((curr-step (plan-node-step (ds-curr-plan *ds*))) wff subplan-node)
+  (let ((curr-step (plan-node-step (ds-curr-plan (get-ds)))) wff subplan-node)
 
     ;; (format t "~%steps of current plan are: ~%")
-    ;; (print-plan-status (ds-curr-plan *ds*)) ; DEBUGGING
+    ;; (print-plan-status (ds-curr-plan (get-ds))) ; DEBUGGING
 
     (setq wff (get-step-wff curr-step))
 
@@ -903,8 +1121,8 @@
 
     ; If a new subplan was generated, use it to expand the current node
     (when subplan-node
-      (setf (ds-curr-plan *ds*) (expand-plan-node (ds-curr-plan *ds*) subplan-node))
-      ;; (print-plan-status (ds-curr-plan *ds*)) ; DEBUGGING
+      (setf (ds-curr-plan (get-ds)) (expand-plan-node (ds-curr-plan (get-ds)) subplan-node))
+      ;; (print-plan-status (ds-curr-plan (get-ds))) ; DEBUGGING
       t)
 )) ; END expand-abstract-plan-steps
 
@@ -921,11 +1139,11 @@
 ; in the plan, but this needs to be made more general, and to make use of explicit
 ; equivalence knowledge.
 ; 
-  (let ((curr-step (plan-node-step (ds-curr-plan *ds*))) next-step wff1 wff2
+  (let ((curr-step (plan-node-step (ds-curr-plan (get-ds)))) next-step wff1 wff2
         emb-ep-name1 emb-ep-name2 subj predicate subplan-node)
     (setq wff1 (get-step-wff curr-step))
-    (when (plan-node-next (ds-curr-plan *ds*))
-      (setq next-step (plan-node-step (plan-node-next (ds-curr-plan *ds*))))
+    (when (plan-node-next (ds-curr-plan (get-ds)))
+      (setq next-step (plan-node-step (plan-node-next (ds-curr-plan (get-ds)))))
       (setq wff2 (get-step-wff next-step))
       ; Attempt to merge subsequent relative speech act steps
       (when (and (relative-speech-act? wff1) (not (variable? (third wff1)))
@@ -939,8 +1157,8 @@
           (list :episodes (episode-var) `(,subj ,predicate (,emb-ep-name1 and ,emb-ep-name2))))))
       ; If the steps are mergeable, merge into current plan
       (when subplan-node
-        (setf (ds-curr-plan *ds*)
-          (merge-plan-nodes (ds-curr-plan *ds*) (plan-node-next (ds-curr-plan *ds*)) subplan-node))))
+        (setf (ds-curr-plan (get-ds))
+          (merge-plan-nodes (ds-curr-plan (get-ds)) (plan-node-next (ds-curr-plan (get-ds))) subplan-node))))
 )) ; END merge-equivalent-plan-steps
 
 
@@ -967,12 +1185,12 @@
 ; be modified to filter old/irrelevant facts from the buffers
 ; (perhaps based on importance or some other metric).
 ;
-  (clear-buffer (buffers-perceptions (ds-buffers *ds*)))
-  (clear-buffer (buffers-gists (ds-buffers *ds*)))
-  (clear-buffer (buffers-semantics (ds-buffers *ds*)))
-  (clear-buffer (buffers-pragmatics (ds-buffers *ds*)))
-  (clear-buffer (buffers-inferences (ds-buffers *ds*)))
-  (clear-buffer (buffers-actions (ds-buffers *ds*)))
+  (clear-buffer (buffers-perceptions (ds-buffers (get-ds))))
+  (clear-buffer (buffers-gists (ds-buffers (get-ds))))
+  (clear-buffer (buffers-semantics (ds-buffers (get-ds))))
+  (clear-buffer (buffers-pragmatics (ds-buffers (get-ds))))
+  (clear-buffer (buffers-inferences (ds-buffers (get-ds))))
+  (clear-buffer (buffers-actions (ds-buffers (get-ds))))
 ) ; END evict-buffers
 
 
@@ -1148,7 +1366,7 @@
     (setq wff (get-step-wff plan-step))
 
     ;; (format t "~%WFF = ~a,~% in the ETA action ~a being processed~%" wff ep-name) ; DEBUGGING
-    ;; (print-plan-status (ds-curr-plan *ds*)) ; DEBUGGING
+    ;; (print-plan-status (ds-curr-plan (get-ds))) ; DEBUGGING
 
     ; Determine the type of the current action, and form a subplan accordingly.
     (cond
@@ -1340,14 +1558,15 @@
 
 
 
-(defun plan-subschema (schema-predicate args) ; {@}
-;````````````````````````````````````````````````
+(defun plan-subschema (schema-predicate args &optional ds) ; {@}
+;```````````````````````````````````````````````````````````
 ; Given a schema predicate and a list of args, create a
 ; subplan from the instantiated schema.
 ;
-  (init-plan-from-schema (get-stored-schema schema-predicate) args *ds*
-    :plan-var-table (ds-plan-var-table *ds*)
-    :schema-instances (ds-schema-instances *ds*))
+  (when (null ds) (setq ds (get-ds)))
+  (init-plan-from-schema (get-stored-schema schema-predicate) args ds
+    :plan-var-table (ds-plan-var-table ds)
+    :schema-instances (ds-schema-instances ds))
 ) ; END plan-subschema
 
 
@@ -1364,8 +1583,8 @@
   (init-plan-from-episodes-from-schemas
     (cons :episodes episodes)
     (plan-step-schemas plan-step)
-    :plan-var-table (ds-plan-var-table *ds*)
-    :schema-instances (ds-schema-instances *ds*))
+    :plan-var-table (ds-plan-var-table (get-ds))
+    :schema-instances (ds-schema-instances (get-ds)))
 ) ; END plan-nested-episode-list
 
 
@@ -1383,8 +1602,8 @@
     episodes-embedded
     episodes-loop
     :schemas (plan-step-schemas plan-step)
-    :plan-var-table (ds-plan-var-table *ds*)
-    :schema-instances (ds-schema-instances *ds*))
+    :plan-var-table (ds-plan-var-table (get-ds))
+    :schema-instances (ds-schema-instances (get-ds)))
 ) ; END plan-nested-episode-list-repeating
 
 
@@ -1509,10 +1728,10 @@
         (setq gist (flatten (second gist)))
 
         ; Store gist-clause in KB
-        (store-gist gist (get ep-name 'topic-keys) (ds-gist-kb-eta *ds*))
+        (store-gist gist (get ep-name 'topic-keys) (ds-gist-kb-eta (get-ds)))
 
         ; Use previous user speech act as context for interpretation
-        (setq prev-step (find-prev-turn-of-agent *^you* *ds*))
+        (setq prev-step (find-prev-turn-of-agent (get-^you) (get-ds)))
         (when prev-step
           (setq prev-step-ep-name (dialogue-turn-episode-name prev-step))
           (setq user-gist-clauses (dialogue-turn-gists prev-step)))
@@ -1523,7 +1742,7 @@
 
         (cond
           ; Use GPT3-based paraphrase model if available
-          ((equal *response-generator* 'GPT3)
+          ((equal (get-generation-mode *config-agent*) 'GPT3)
             (setq utterance (form-surface-utterance-using-language-model
               :conds (get-facts-for-generation '(dial-schemas))
               :gist gist)))
@@ -1579,7 +1798,7 @@
         (setq expr (extract-set expr))
         (setq user-gists (apply #'append (mapcar #'get-gist-clauses-characterizing-episode expr)))
         (setq user-semantics (apply #'append (mapcar (lambda (e)
-          (resolve-references (get-semantic-interpretations-characterizing-episode e *ds*))) expr)))))
+          (resolve-references (get-semantic-interpretations-characterizing-episode e (get-ds)))) expr)))))
 
     (format t "~% ========== Eta Generation ==========") ; DEBUGGING
     ;; (format t "~% user gist clause (for ~a) is ~a" expr user-gists) ; DEBUGGING
@@ -1608,7 +1827,7 @@
       ((null choice)
         (init-plan-from-episode-list
           (list :episodes (episode-var) (create-say-to-wff
-            (if (equal *response-generator* 'GPT3)
+            (if (equal (get-generation-mode *config-agent*) 'GPT3)
               (form-surface-utterance-using-language-model
                 :conds (get-facts-for-generation '(dial-schemas))
                 :facts (get-facts-for-generation '(epi-schemas memory)))
@@ -1624,7 +1843,7 @@
             (setq keys (second (cdr choice)))))
         ;; (format t "~%chosen Eta gist clause = ~a~%" eta-gist) ; DEBUGGING
         ; Store gist clause in KB
-        (store-gist eta-gist keys (ds-gist-kb-eta *ds*))
+        (store-gist eta-gist keys (ds-gist-kb-eta (get-ds)))
         ; Create paraphrase-to.v subplan
         (init-plan-from-episode-list
           (list :episodes (episode-var) `(^me paraphrase-to.v ^you (quote ,eta-gist)))))
@@ -1684,7 +1903,7 @@
         (setq expr (extract-set expr))
         (setq user-gists (apply #'append (mapcar #'get-gist-clauses-characterizing-episode expr)))
         (setq user-semantics (apply #'append (mapcar (lambda (e)
-          (resolve-references (get-semantic-interpretations-characterizing-episode e *ds*))) expr)))))
+          (resolve-references (get-semantic-interpretations-characterizing-episode e (get-ds)))) expr)))))
 
     ;; (format t "~% user gist clause (for ~a) is ~a" expr user-gists) ; DEBUGGING
     ;; (format t "~% user semantics (for ~a) is ~a ~%" expr user-semantics) ; DEBUGGING
@@ -1723,7 +1942,7 @@
             (setq keys (second (cdr choice)))))
         ;; (format t "~%chosen Eta gist clause = ~a~%" eta-gist) ; DEBUGGING
         ; Store gist clause in KB
-        (store-gist eta-gist keys (ds-gist-kb-eta *ds*))
+        (store-gist eta-gist keys (ds-gist-kb-eta (get-ds)))
         ; Add paraphrase-to.v subplan
         (init-plan-from-episode-list
           (list :episodes (episode-var) `(^me paraphrase-to.v ^you (quote ,eta-gist)))))
@@ -1771,13 +1990,13 @@
 
     ; Generate response based on list of relations
     (cond
-      ((not (member '|Spatial-Reasoning-System| *registered-systems-specialist*))
+      ((not (member '|Spatial-Reasoning-System| (get-specialist-servers *config-agent*)))
         (setq ans '(Could not form final answer \: |Spatial-Reasoning-System| not registered \.)))
       (t
-        (setq tuple (generate-response (eval user-semantics) (eval expr) *ds*))
+        (setq tuple (generate-response (eval user-semantics) (eval expr) (get-ds)))
         (setq ans (first tuple))
         (setq eta-semantics (second tuple))
-        (store-semantic-interpretation-characterizing-episode eta-semantics ep-name '^me '^you *ds*)))
+        (store-semantic-interpretation-characterizing-episode eta-semantics ep-name '^me '^you (get-ds))))
 
     (format t "answer to output: ~a~%" ans) ; DEBUGGING
 
@@ -1809,13 +2028,13 @@
 
     ; Generate response gist based on list of relations
     (cond
-      ((not (member '|Spatial-Reasoning-System| *registered-systems-specialist*))
+      ((not (member '|Spatial-Reasoning-System| (get-specialist-servers *config-agent*)))
         (setq ans '(Could not form final answer \: |Spatial-Reasoning-System| not registered \.)))
       (t
-        (setq tuple (generate-response (eval user-semantics) (eval expr) *ds*))
+        (setq tuple (generate-response (eval user-semantics) (eval expr) (get-ds)))
         (setq ans (first tuple))
         (setq eta-semantics (second tuple))
-        (store-semantic-interpretation-characterizing-episode eta-semantics ep-name '^me '^you *ds*)))
+        (store-semantic-interpretation-characterizing-episode eta-semantics ep-name '^me '^you (get-ds))))
 
     (format t "gist answer to output: ~a~%" ans) ; DEBUGGING
 
@@ -1844,13 +2063,13 @@
     (setq wff (get-step-wff plan-step))
 
     (cond
-      ((null (member '|Spatial-Reasoning-System| *registered-systems-specialist*))
+      ((null (member '|Spatial-Reasoning-System| (get-specialist-servers *config-agent*)))
         (setq proposal-gist '(Could not create proposal \: '|Spatial-Reasoning-System| not registered \.)))
       (t (setq proposal-gist (generate-proposal action-kind))))
 
     ;; (format t "proposal gist: ~a~%" proposal-gist) ; DEBUGGING
 
-    (store-gist-clause-characterizing-episode proposal-gist ep-name '^me '^you *ds*)
+    (store-gist-clause-characterizing-episode proposal-gist ep-name '^me '^you (get-ds))
 
     (if (null proposal-gist)
       (return-from plan-proposal nil))
@@ -1886,13 +2105,13 @@
     (setq wff (get-step-wff plan-step))
 
     (cond
-      ((null (member '|Spatial-Reasoning-System| *registered-systems-specialist*))
+      ((null (member '|Spatial-Reasoning-System| (get-specialist-servers *config-agent*)))
         (setq correction-gist '(Could not create correction \: |Spatial-Reasoning-System| not registered \.)))
       (t (setq correction-gist (generate-proposal action-kind))))
 
     ;; (format t "correction gist: ~a~%" correction-gist) ; DEBUGGING
 
-    (store-gist-clause-characterizing-episode correction-gist ep-name '^me '^you *ds*)
+    (store-gist-clause-characterizing-episode correction-gist ep-name '^me '^you (get-ds))
 
     (if (null correction-gist)
       (return-from plan-correction nil))
@@ -1948,13 +2167,13 @@
 
     (cond
       ((variable? info)
-        (setq utterance (if (equal *response-generator* 'GPT3)
+        (setq utterance (if (equal (get-generation-mode *config-agent*) 'GPT3)
           (form-surface-utterance-using-language-model
             :conds (get-facts-for-generation '(dial-schemas))
             :facts (get-facts-for-generation '(epi-schemas memory))
             :mode 'statement)
           nil)))
-      (t (setq utterance (expr-to-words info))))
+      (t (setq utterance (expr-to-words info :^me (get-^me) :^you (get-^you)))))
 
     (init-plan-from-episode-list
       (list :episodes (episode-var) (create-say-to-wff utterance)))
@@ -1982,13 +2201,13 @@
 
     (cond
       ((variable? info)
-        (setq utterance (if (equal *response-generator* 'GPT3)
+        (setq utterance (if (equal (get-generation-mode *config-agent*) 'GPT3)
           (form-surface-utterance-using-language-model
             :conds (get-facts-for-generation '(dial-schemas))
             :facts (get-facts-for-generation '(epi-schemas memory))
             :mode 'statement)
           nil)))
-      (t (setq utterance (expr-to-words info))))
+      (t (setq utterance (expr-to-words info :^me (get-^me) :^you (get-^you)))))
 
     (init-plan-from-episode-list
       (list :episodes (episode-var) (create-say-to-wff utterance)))
@@ -2014,13 +2233,13 @@
 
     (cond
       ((variable? question)
-        (setq utterance (if (equal *response-generator* 'GPT3)
+        (setq utterance (if (equal (get-generation-mode *config-agent*) 'GPT3)
           (form-surface-utterance-using-language-model
             :conds (get-facts-for-generation '(dial-schemas))
             :facts (get-facts-for-generation '(epi-schemas memory))
             :mode 'question)
           nil)))
-      (t (setq utterance (expr-to-words question))))
+      (t (setq utterance (expr-to-words question :^me (get-^me) :^you (get-^you)))))
 
     (init-plan-from-episode-list
       (list :episodes (episode-var) (create-say-to-wff utterance)))
@@ -2122,10 +2341,10 @@
 ; Wrapper function to bind a variable to a value in the plan structure.
 ; plan-node is assumed to be the current node if not given.
 ;
-  (if (null plan-node) (setq plan-node (ds-curr-plan *ds*)))
+  (if (null plan-node) (setq plan-node (ds-curr-plan (get-ds))))
   (bind-variable-in-plan plan-node val var
-    :plan-var-table (ds-plan-var-table *ds*)
-    :schema-instances (ds-schema-instances *ds*))
+    :plan-var-table (ds-plan-var-table (get-ds))
+    :schema-instances (ds-schema-instances (get-ds)))
 ) ; END instantiate-plan-variable
 
 
@@ -2162,13 +2381,13 @@
         ; Otherwise, create a new episode constant subsuming each subepisode
         (t
           (setq ep-name (episode-name))
-          (store-init-time-of-episode ep-name *ds*)))
+          (store-init-time-of-episode ep-name (get-ds))))
 
       ; Substitute in plan and store (wff ** ep-name) in context/memory
       ; (if not keyword step)
       (instantiate-plan-variable ep-name ep-var)
       (when (not (keywordp (car wff)))
-        (store-contextual-fact-characterizing-episode wff ep-name *ds*)))
+        (store-contextual-fact-characterizing-episode wff ep-name (get-ds))))
 
     ; Recur for all supersteps
     (mapcar #'instantiate-superstep (plan-step-supersteps plan-step))
@@ -2196,18 +2415,18 @@
     ; Generate a constant for the episode and destructively substitute in plan
     (setq ep-name (episode-name))
     ; TODO: use episode-relations formulas to assert relations in timegraph
-    (store-init-time-of-episode ep-name *ds*)
+    (store-init-time-of-episode ep-name (get-ds))
     (instantiate-plan-variable ep-name ep-var)
 
     ; Store (wff ** ep-name) in context/memory
     (when (not (keywordp (car wff)))
-      (store-contextual-fact-characterizing-episode wff ep-name *ds*))
+      (store-contextual-fact-characterizing-episode wff ep-name (get-ds)))
 
     ; Instantiate all supersteps of this step whose substeps are now fully completed
     (mapcar #'instantiate-superstep (plan-step-supersteps plan-step))
 
     ;; (format t "action list after substituting ~a for ~a:~%" ep-name ep-var)
-    ;; (print-plan-status (ds-curr-plan *ds*)) ; DEBUGGING
+    ;; (print-plan-status (ds-curr-plan (get-ds))) ; DEBUGGING
 
     ; TODO: should (wff ** ep-name) be stored in context at this point?
     ;       as well as instantiating the non-fluent variable, e.g. '!e1'?
@@ -2295,7 +2514,7 @@
     (setq wff (get-step-wff plan-step))
 
     ;; (format t "~%WFF = ~a,~% in the ETA action ~a being processed~%" wff ep-name) ; DEBUGGING
-    ;; (print-plan-status (ds-curr-plan *ds*)) ; DEBUGGING
+    ;; (print-plan-status (ds-curr-plan (get-ds))) ; DEBUGGING
 
     ; Determine the type of the current action, and execute accordingly.
     (cond
@@ -2435,22 +2654,23 @@
   (let (certainty match)
 
     ; Write output buffer
-    (when *output-buffer*
-      (write-output-buffer))
+    (when (get-output-buffer)
+      (write-output-buffer (get-output-buffer) (get-io-path))
+      (set-output-buffer nil))
 
     ; Check certainty of expected plan step
     (setq certainty (get-step-certainty plan-step))
 
     (cond
       ; If timer exceeds period (a function of certainty of step), instantiate a 'failed' episode
-      ((>=inf (- (get-universal-time) *expected-step-failure-timer*) (certainty-to-period certainty)) 
+      ((>=inf (- (get-universal-time) (get-step-failure-timer)) (certainty-to-period certainty)) 
         (fail-curr-step plan-step))
 
       ; Otherwise, inquire self about the truth of the immediately pending episode. Plan is advanced
       ; (and appropriate substitutions made) if the expected episode is determined to be true.
       (t
         (setq match (inquire-truth-of-curr-step plan-step))
-        (if match (flush-context *ds*))
+        (if match (flush-context (get-ds)))
         match))
 )) ; END process-expected-step
 
@@ -2471,13 +2691,13 @@
     (setq wff (get-step-wff plan-step))
 
     ; Inquire about truth of wff in context; use first match
-    (setq match (get-from-context wff *ds*))
+    (setq match (get-from-context wff (get-ds)))
     (if (equal match T) (setq match (list wff)))
     (when match
       (setq match (car match))
 
       ; Get episode name corresponding to contextual fact
-      (setq ep-name (get-episode-from-contextual-fact match *ds*))
+      (setq ep-name (get-episode-from-contextual-fact match (get-ds)))
       
       ; Substitute that episode name for the episode variable in the plan
       (instantiate-plan-variable ep-name ep-var)
@@ -2493,7 +2713,7 @@
       ; currently necessary to prevent the program from automatically looping in the case
       ; where a :repeat-until episode consists of the user saying something and the agent
       ; replying, since the say-to.v expectation will keep matching the same fact in context.
-      (if (member (second match) *verbs-telic*) (remove-old-contextual-fact match *ds*)))
+      (if (member (second match) *verbs-telic*) (remove-old-contextual-fact match (get-ds))))
 
     (if match t nil)
 )) ; END inquire-truth-of-curr-step
@@ -2525,8 +2745,8 @@
     ; essentially a no-op and isn't currently used for any further inference or replanning.
     ; TODO: this needs to be reworked after working out semantics for failed episodes.
     (if (equal '^you (car wff))
-      (store-contextual-fact-characterizing-episode `(^you do.v (no.d thing.n)) ep-name *ds*)
-      (store-contextual-fact-characterizing-episode '((no.d thing.n) happen.v) ep-name *ds*))
+      (store-contextual-fact-characterizing-episode `(^you do.v (no.d thing.n)) ep-name (get-ds))
+      (store-contextual-fact-characterizing-episode '((no.d thing.n) happen.v) ep-name (get-ds)))
     
     t
 )) ; END fail-curr-step
@@ -2631,7 +2851,7 @@
             (format t "~%*** SAY-ACTION ~a~%    BY THE USER SHOULD SPECIFY A QUOTED WORD LIST OR VARIABLE" expr)))
 
         ; Use previous Eta speech act as context for interpretation
-        (setq prev-step (find-prev-turn-of-agent *^me* *ds*))
+        (setq prev-step (find-prev-turn-of-agent (get-^me) (get-ds)))
         (when prev-step
           (setq prev-step-ep-name (dialogue-turn-episode-name prev-step))
           (setq prev-step-gists (dialogue-turn-gists prev-step)))
@@ -2642,7 +2862,7 @@
           (setq relative-ep-names (extract-set (third curr-step-wff)))
           (dolist (relative-ep-name relative-ep-names)
             (setq prev-step-gists (append prev-step-gists
-              (get-gist-clauses-characterizing-episode relative-ep-name *ds*)))))
+              (get-gist-clauses-characterizing-episode relative-ep-name (get-ds))))))
 
         (setq prev-step-gists (reverse (remove-duplicates prev-step-gists :test #'equal)))
 
@@ -2669,9 +2889,9 @@
 
         ; Store user gist-clauses in memory and input queue
         (dolist (user-gist user-gists)
-          (store-gist-clause-characterizing-episode user-gist ep-name '^you '^me *ds*))
+          (store-gist-clause-characterizing-episode user-gist ep-name '^you '^me (get-ds)))
         (setq user-gist-ep-names (mapcar (lambda (user-gist) (list ep-name-new user-gist)) user-gists))
-        (enqueue-in-buffer-ordered user-gist-ep-names (buffers-gists (ds-buffers *ds*)))
+        (enqueue-in-buffer-ordered user-gist-ep-names (buffers-gists (ds-buffers (get-ds))))
 
         ; Obtain semantic interpretation(s) of the user gist-clauses
         (setq user-semantics (remove-duplicates (remove nil
@@ -2681,17 +2901,17 @@
 
         ; Store the semantic interpretations in memory and input queue
         (dolist (ulf user-semantics)
-          (store-semantic-interpretation-characterizing-episode ulf ep-name '^you '^me *ds*))
+          (store-semantic-interpretation-characterizing-episode ulf ep-name '^you '^me (get-ds)))
         (setq user-semantic-ep-names (mapcar (lambda (ulf) (list ep-name-new ulf)) user-semantics))
-        (enqueue-in-buffer-ordered user-semantic-ep-names (buffers-semantics (ds-buffers *ds*)))
+        (enqueue-in-buffer-ordered user-semantic-ep-names (buffers-semantics (ds-buffers (get-ds))))
 
         ; Add the fact (^you reply-to.v <prev-step-ep-name>) to context (characterizing ep-name)
         (when prev-step-ep-name
-          (store-contextual-fact-characterizing-episode `(^you reply-to.v ,prev-step-ep-name) ep-name *ds*))
+          (store-contextual-fact-characterizing-episode `(^you reply-to.v ,prev-step-ep-name) ep-name (get-ds)))
 
         ; If current plan step is a relative speech act, add the fact (^you reply-to.v <rel-ep-name>) as well
         (when relative-ep-names
-          (store-contextual-fact-characterizing-episode `(^you reply-to.v ,(make-set relative-ep-names :use-and t)) ep-name *ds*))
+          (store-contextual-fact-characterizing-episode `(^you reply-to.v ,(make-set relative-ep-names :use-and t)) ep-name (get-ds)))
 
         ; Interpret any additional pragmatic facts from the gist-clause. For instance, the speech act
         ; (^you say-bye-to.v ^me) may be derived from the gist-clause (Goodbye \.).
@@ -2702,9 +2922,9 @@
 
         ; Add each pragmatic wff to context (characterizing ep-name) and input queue
         (dolist (ulf user-pragmatics)
-          (store-contextual-fact-characterizing-episode ulf ep-name *ds*))
+          (store-contextual-fact-characterizing-episode ulf ep-name (get-ds)))
         (setq user-pragmatic-ep-names (mapcar (lambda (ulf) (list ep-name-new ulf)) user-pragmatics))
-        (enqueue-in-buffer-ordered user-pragmatic-ep-names (buffers-pragmatics (ds-buffers *ds*)))
+        (enqueue-in-buffer-ordered user-pragmatic-ep-names (buffers-pragmatics (ds-buffers (get-ds))))
 
         ; Determine any obligations placed on Eta by utterance (TODO)
         (setq eta-obligations nil)
@@ -2712,16 +2932,17 @@
         ; Log and write dialogue turn
         (log-turn-write (car
           (push (make-dialogue-turn
-              :agent *^you*
+              :agent (get-^you)
               :utterance words
               :gists user-gists
               :semantics (resolve-references user-semantics)
               :pragmatics user-pragmatics
               :obligations eta-obligations
               :episode-name ep-name)
-            (ds-conversation-log *ds*))))
+            (ds-conversation-log (get-ds))))
+          (get-io-path))
 
-        ;; (print-plan-status (ds-curr-plan *ds*)) ; DEBUGGING
+        ;; (print-plan-status (ds-curr-plan (get-ds))) ; DEBUGGING
 
       )
       ;````````````````````````````
@@ -2736,7 +2957,7 @@
         ;; (format t "~%Matched arguments = ~a" expr) ; DEBUGGING
 
         ; Check context for any current goal step; get reified action from goal step
-        (setq goal-step (car (get-from-context '(?ka step1-toward.p ?goal) *ds*)))
+        (setq goal-step (car (get-from-context '(?ka step1-toward.p ?goal) (get-ds))))
         (setq ka (first goal-step))
         
         (format t "~%Found ka = ~a" ka) ; DEBUGGING
@@ -2756,7 +2977,7 @@
           (store-in-context `((pair ^you ,ep-name) instance-of.p ,ka)))
         
         ; Store (^you try1.v (ka ...)) as characterizing ep-name regardless
-        (store-contextual-fact-characterizing-episode `(^you try1.v ,ka) ep-name *ds*)
+        (store-contextual-fact-characterizing-episode `(^you try1.v ,ka) ep-name (get-ds))
 
       )
       ; Some other wff (currently nothing is done in this case)
@@ -2794,7 +3015,7 @@
     ; bind variable to a generated utterance
     (cond
       ((variable? expr)
-        (setq expr-new (if (equal *response-generator* 'GPT3)
+        (setq expr-new (if (equal (get-generation-mode *config-agent*) 'GPT3)
           (form-surface-utterance-using-language-model
             :conds (get-facts-for-generation '(dial-schemas))
             :facts (get-facts-for-generation '(epi-schemas memory)))
@@ -2803,13 +3024,13 @@
         (setq expr expr-new))
       (t (setq expr (flatten (second expr)))))
     
-    (setf (ds-count *ds*) (1+ (ds-count *ds*)))
-    (setq expr (tag-emotions expr))
+    (setf (ds-count (get-ds)) (1+ (ds-count (get-ds))))
+    (setq expr (tag-emotions expr (is-emotion-mode *config-agent*)))
 
     ; If using GPT3 for gist clause interpretation, add any gists found by GPT3.
-    (when (equal *gist-interpreter* 'GPT3)
+    (when (equal (get-interpretation-mode *config-agent*) 'GPT3)
       ; Use previous user speech act as context for interpretation
-      (setq prev-step (find-prev-turn-of-agent *^you* *ds*))
+      (setq prev-step (find-prev-turn-of-agent (get-^you) (get-ds)))
       (when prev-step
         (setq prev-step-ep-name (dialogue-turn-episode-name prev-step))
         (setq user-gists (dialogue-turn-gists prev-step)))
@@ -2819,7 +3040,7 @@
       ; Store any gist clauses for episode and parent episode
       (mapcar (lambda (gist)
           (when (not (member 'nil gist))
-            (store-gist-clause-characterizing-episode gist ep-name '^me '^you *ds*)))
+            (store-gist-clause-characterizing-episode gist ep-name '^me '^you (get-ds))))
         eta-gists))
 
     ; Get any obligations placed on the user from the schema that this episode is part of
@@ -2828,20 +3049,25 @@
     ; Log and write dialogue turn
     (log-turn-write (car
       (push (make-dialogue-turn
-          :agent *^me*
+          :agent (get-^me)
           :utterance expr
-          :gists (get-gist-clauses-characterizing-episode ep-name *ds*)
-          :semantics (get-semantic-interpretations-characterizing-episode ep-name *ds*)
+          :gists (get-gist-clauses-characterizing-episode ep-name (get-ds))
+          :semantics (get-semantic-interpretations-characterizing-episode ep-name (get-ds))
           :pragmatics nil
           :obligations user-obligations
           :episode-name ep-name)
-        (ds-conversation-log *ds*))))
+        (ds-conversation-log (get-ds))))
+      (get-io-path))
 
-    ;; (print-plan-status (ds-curr-plan *ds*)) ; DEBUGGING
+    ;; (print-plan-status (ds-curr-plan (get-ds))) ; DEBUGGING
+
+    ; Add words to output buffer and increment output count
+    (set-output-count (1+ (get-output-count)))
+    (push-output-buffer expr)
 
     ; Output words
-    (if (member '|Audio| *registered-systems-perception*)
-      (say-words expr)
+    (if (member '|Audio| (get-perception-servers *config-agent*))
+      (say-words expr (get-io-path) :output-count (get-output-count))
       (print-words expr))
 
     var-bindings
@@ -2855,9 +3081,10 @@
 ;```````````````````````````
 ; Write any final buffered output and exit the conversation.
 ;
-  (when *output-buffer*
-    (write-output-buffer))
-  (setq *quit-conversation* t)
+  (when (get-output-buffer)
+    (write-output-buffer (get-output-buffer) (get-io-path))
+    (set-output-buffer nil))
+  (set-quit-conversation t)
 ) ; END execute-say-bye
 
 
@@ -2872,11 +3099,11 @@
     (setq user-semantics (resolve-references user-semantics))
 
     ; Get object locations from context
-    (setq object-locations (get-from-context '(?x at-loc.p ?y) *ds*))
+    (setq object-locations (get-from-context '(?x at-loc.p ?y) (get-ds)))
     ;; (format t "found object locations from context: ~a~%" object-locations) ; DEBUGGING
 
     ; Determine answers by recalling from history
-    (setq ans `(quote ,(recall-answer object-locations (eval user-semantics) *ds*)))
+    (setq ans `(quote ,(recall-answer object-locations (eval user-semantics) (get-ds))))
     (format t "recalled answer: ~a~%" ans) ; DEBUGGING
 
     ; Bind ans to variable given in plan (e.g. ?ans-relations)
@@ -2894,7 +3121,7 @@
   (setq query (eval (resolve-references query)))
 
   ; Send query to external source
-  (if system (write-subsystem (list query) system))
+  (if system (write-subsystem (list query) system (get-io-path)))
 ) ; END execute-seek-answer-from
 
 
@@ -2906,7 +3133,7 @@
 ;
   (let (ans var-bindings)
     ; Get answer from subsystem
-    (setq ans (read-subsystem system :block t))
+    (setq ans (read-subsystem system (get-io-path) :block t))
     (if (not (answer-list? ans)) (setq ans nil))
     (if ans (setq ans `(quote ,ans)))
 
@@ -2926,7 +3153,7 @@
 ; Adds a given expression to short term memory (context).
 ;
   ; Store formula in context
-  (store-new-contextual-facts (extract-set expr) *ds*)
+  (store-new-contextual-facts (extract-set expr) (get-ds))
 ) ; END execute-commit-to-STM
 
 
@@ -2952,23 +3179,23 @@
     ; Get goal name from expr, and corresponding record structure
     (setq goal-name (get-single-binding
       (cdr (bindings-from-ttt-match-deep '(_!1 step1-toward.p _!2) expr))))
-    (setq goal-schema (get-record-structure goal-name *ds*))
+    (setq goal-schema (get-record-structure goal-name (get-ds)))
     ; Substitute record structure for goal name in expr
     (setq expr (subst goal-schema goal-name expr))
     ; Request step towards goal schema from BW system
     (setq query `((what.pro be.v (= ,expr)) ?))
-    (write-subsystem (list query) '|Spatial-Reasoning-System|)
+    (write-subsystem (list query) '|Spatial-Reasoning-System| (get-io-path))
 
     ; Get answer from BW system
     ; This is either nil or a list (((ka ...) step1-toward.p ($ ...)))
-    (setq ans (read-subsystem '|Spatial-Reasoning-System| :block t))
+    (setq ans (read-subsystem '|Spatial-Reasoning-System| (get-io-path) :block t))
     ; Substitute goal name for record structure in ans
     (setq ans (subst goal-name goal-schema ans :test #'equal))
     ; Set sk-name to reified action
     (setq sk-name (get-single-binding
       (bindings-from-ttt-match-deep '(_!1 step1-toward.p _!2) ans)))
     ; Remove existing step1-toward.p propositions from context, and add new one(s)
-    (remove-from-context `(?x step1-toward.p ,goal-name) *ds*)
+    (remove-from-context `(?x step1-toward.p ,goal-name) (get-ds))
     (mapcar #'store-in-context ans)
     ; Substitute skolem name for skolem var in schema
     (format t "found ~a for variable ~a~%" sk-name sk-var)
@@ -3016,7 +3243,7 @@
     ; Store fact that sk-name chosen in context (removing any existing choice)
     ; TODO: perhaps choose.v actions are 'instantaneous' and should therefore be
     ; removed periodically, along with say-to.v actions etc.
-    (remove-from-context '(^me choose.v ?x) *ds*)
+    (remove-from-context '(^me choose.v ?x) (get-ds))
     (store-in-context `(^me choose.v ,sk-name))
 
     ; Bind variable to skolem constant in plan
@@ -3044,21 +3271,21 @@
     ; Get concept name from expr, and corresponding record structure
     (setq concept-name (get-single-binding
       (cdr (bindings-from-ttt-match-deep '(_!1 instance-of.p _!2) expr))))
-    (setq concept-schema (get-record-structure concept-name *ds*))
+    (setq concept-schema (get-record-structure concept-name (get-ds)))
     ; Substitute record structure for concept name in expr
     (setq expr (subst concept-schema concept-name expr))
     ; Request goal representation from BW system
     (setq query `((what.pro be.v (= ,expr)) ?))
-    (write-subsystem (list query) '|Spatial-Reasoning-System|)
+    (write-subsystem (list query) '|Spatial-Reasoning-System| (get-io-path))
 
     ; Get answer from BW system
     ; This is a list of relations ((($ ...) goal-schema1.n) (($ ...) instance-of.p ($ ...)))
-    (setq ans (read-subsystem '|Spatial-Reasoning-System| :block t))
+    (setq ans (read-subsystem '|Spatial-Reasoning-System| (get-io-path) :block t))
     ; Create name for goal representation and add alias
     (setq sk-name (gentemp "BW-goal-rep"))
     (setq goal-schema (get-single-binding
       (bindings-from-ttt-match-deep '(_! goal-schema1.n) ans)))
-    (add-alias goal-schema sk-name *ds*)
+    (add-alias goal-schema sk-name (get-ds))
     ; Substitute canonical names for record structures in relations
     (setq ans (subst concept-name concept-schema ans :test #'equal))
     (setq ans (subst sk-name goal-schema ans :test #'equal))
@@ -3103,12 +3330,12 @@
       ((setq bindings (bindings-from-ttt-match '(^me want.v (that _!)) goal-wff))
         (setq goal-clause (get-single-binding bindings))
         ; Check if goal clause is true in context
-        (if (get-from-context goal-clause *ds*) t nil))
+        (if (get-from-context goal-clause (get-ds)) t nil))
       ; Support for tensed version as well
       ((setq bindings (bindings-from-ttt-match '(^me ((pres want.v) (that _!))) goal-wff))
         (setq goal-clause (get-single-binding bindings))
         ; Check if goal clause is true in context
-        (if (get-from-context goal-clause *ds*) t nil))
+        (if (get-from-context goal-clause (get-ds)) t nil))
 
       (t
         ;; (format t "~%*** UNSUPPORTED GOAL ~a (~a) " goal-var goal-wff) ; DEBUGGING
@@ -3183,8 +3410,8 @@
   (let (sk-name sk-const)
     (setq sk-const (skolem (implode (cdr (explode sk-var)))))
     (setq sk-name
-      (car (find-all-instances-context `(:l (?x) (?x ,type)) *ds*)))
-    (add-alias sk-const sk-name *ds*)
+      (car (find-all-instances-context `(:l (?x) (?x ,type)) (get-ds))))
+    (add-alias sk-const sk-name (get-ds))
     sk-name)
 ) ; END observe-variable-type
 
@@ -3235,7 +3462,7 @@
 ;
   (let (gist-clauses topic-keys facts)
     ;; (format t "~% ****** input sentence: ~a~%" sentence)
-    (setq gist-clauses (get-gist-clauses-characterizing-episode eta-action-name *ds*))
+    (setq gist-clauses (get-gist-clauses-characterizing-episode eta-action-name (get-ds)))
     ;; (format t "~% ****** gist clauses are ~a **** ~%" gist-clauses)
     ;; (format t "~% ****** quoted question returns ~a **** ~%" (some #'question? gist-clauses)) ; DEBUGGING
     (if (not (some #'question? gist-clauses))
@@ -3243,8 +3470,8 @@
     (setq topic-keys (get eta-action-name 'topic-keys))
     ;; (format t "~% ****** topic key is ~a ****** ~%" topic-keys) ; DEBUGGING
     (if (null topic-keys) (return-from obviated-question nil))
-    (setq facts (remove nil (mapcar (lambda (key) (gethash key (ds-gist-kb-user *ds*))) topic-keys)))
-    ;; (format t "~% ****** gist-kb ~a ****** ~%" (ds-gist-kb-user *ds*))
+    (setq facts (remove nil (mapcar (lambda (key) (gethash key (ds-gist-kb-user (get-ds)))) topic-keys)))
+    ;; (format t "~% ****** gist-kb ~a ****** ~%" (ds-gist-kb-user (get-ds)))
     ;; (format t "~% ****** list facts about this topic = ~a ****** ~%" facts)
     ;; (format t "~% ****** There is no fact about this topic. ~a ****** ~%" (null facts)) ; DEBUGGING
     (if (null facts) (return-from obviated-question nil))
@@ -3271,8 +3498,8 @@
     (setq topic-keys (get eta-action-name 'topic-keys))
     ;; (format t "~% ****** topic key for ~a is ~a ****** ~%" eta-action-name topic-keys) ; DEBUGGING
     (if (null topic-keys) (return-from obviated-action nil))
-    (setq facts (remove nil (mapcar (lambda (key) (gethash key (ds-gist-kb-user *ds*))) topic-keys)))
-    ;; (format t "~% ****** gist-kb ~a ****** ~%" (ds-gist-kb-user *ds*))
+    (setq facts (remove nil (mapcar (lambda (key) (gethash key (ds-gist-kb-user (get-ds)))) topic-keys)))
+    ;; (format t "~% ****** gist-kb ~a ****** ~%" (ds-gist-kb-user (get-ds)))
     ;; (format t "~% ****** list facts about this topic = ~a ****** ~%" facts)
     ;; (format t "~% ****** There is no fact about this topic. ~a ****** ~%" (null facts)) ; DEBUGGING
     (if (null facts) (return-from obviated-action nil))
@@ -3299,9 +3526,9 @@
 ; Gets the dialogue history for use in response generation.
 ;
   (let (history-agents history-utterances history)
-    (setq history-agents (reverse (mapcar #'dialogue-turn-agent (ds-conversation-log *ds*))))
+    (setq history-agents (reverse (mapcar #'dialogue-turn-agent (ds-conversation-log (get-ds)))))
     (setq history-utterances
-      (reverse (mapcar #'untag-emotions (mapcar #'dialogue-turn-utterance (ds-conversation-log *ds*)))))
+      (reverse (mapcar #'untag-emotions (mapcar #'dialogue-turn-utterance (ds-conversation-log (get-ds))))))
     (setq history (mapcar (lambda (agent utterance) (list agent utterance)) history-agents history-utterances))
     history
 )) ; END get-history-for-generation
@@ -3317,7 +3544,7 @@
 ;
   (let (prev-utterance)
     (setq prev-utterance (second (car (last
-      (remove-if (lambda (turn) (equal (first turn) *^me*)) history)))))
+      (remove-if (lambda (turn) (equal (first turn) (get-^me))) history)))))
     (when (null prev-utterance)
       (setq prev-utterance '(Hello \.)))
     prev-utterance
@@ -3336,7 +3563,7 @@
 ; 'memory       : use a subset of facts retrieved from memory based on similarity with previous turn.
 ; Or a list of any of these types.
 ;
-  (let ((schemas (get-schema-instance-ids (ds-curr-plan *ds*))) schema-instance
+  (let ((schemas (get-schema-instance-ids (ds-curr-plan (get-ds)))) schema-instance
         rigid-conds static-conds preconds goals relevant-memory query-str facts
         relevant-epi-schemas relevant-epi-schema-knowledge)
 
@@ -3349,7 +3576,7 @@
     (when (member 'dial-schemas types)
       ; TODO: add other relevant schema categories here in the future
       (dolist (schema schemas)
-        (setq schema-instance (gethash schema (ds-schema-instances *ds*)))
+        (setq schema-instance (gethash schema (ds-schema-instances (get-ds))))
         (setq rigid-conds (append rigid-conds (get-schema-section-wffs schema-instance :rigid-conds)))
         (setq static-conds (append static-conds (get-schema-section-wffs schema-instance :static-conds)))
         (setq preconds (append preconds (get-schema-section-wffs schema-instance :preconds)))
@@ -3357,19 +3584,19 @@
 
       (format t "~%  * Generating response using schemas: <~a> "
         (str-join (mapcar (lambda (schema)
-          (string (schema-predicate (gethash schema (ds-schema-instances *ds*))))) schemas) #\,)) ; DEBUGGING
+          (string (schema-predicate (gethash schema (ds-schema-instances (get-ds)))))) schemas) #\,)) ; DEBUGGING
     )
 
     ; Get relevant habitual/event schema knowledge
     (when (member 'epi-schemas types)
-      (setq relevant-epi-schemas (reverse (retrieve-relevant-epi-schemas query-str)))
+      (setq relevant-epi-schemas (reverse (retrieve-relevant-epi-schemas query-str *embedding-path*)))
 
       (format t "~%  * Generating response using retrieved epi-schemas~%      (from \"~a\"):~%   <~a> "
         query-str (str-join (mapcar (lambda (schema) (string (schema-predicate schema))) relevant-epi-schemas) #\,)) ; DEBUGGING
 
       ; TODO: ensure that header precedes the facts for each schema
       (setq relevant-epi-schema-knowledge (apply #'append (mapcar (lambda (schema)
-          (retrieve-relevant-schema-facts query-str schema))
+          (retrieve-relevant-schema-facts query-str schema *embedding-path*))
         relevant-epi-schemas)))
 
       (format t "~%  * Using the following facts from the retrieved epi-schemas:~%   ~a " relevant-epi-schema-knowledge) ; DEBUGGING
@@ -3377,7 +3604,7 @@
 
     ; Get relevant episodic memory
     (when (member 'memory types)
-      (setq relevant-memory (reverse (retrieve-relevant-knowledge-from-kb query-str)))
+      (setq relevant-memory (reverse (retrieve-relevant-knowledge-from-kb query-str *embedding-path*)))
 
       (format t "~%  * Generating response using retrieved facts~%      (from \"~a\"):~%   ~a " query-str relevant-memory) ; DEBUGGING
     )
@@ -3416,7 +3643,10 @@
 ; USES TT
 ;
   (let (utterance prev-utterance incomplete-utterances history conds-str facts-str
-        history-str choice examples examples-str emotion)
+        history-str choice examples examples-str emotion ^me ^you)
+
+    (setq ^me (get-^me))
+    (setq ^you (get-^you))
 
     ; Split off emotion in given gist clause (if any)
     (when gist
@@ -3430,8 +3660,8 @@
     (setq prev-utterance (get-prev-utterance-for-generation history))
 
     ; Convert facts and history to strings
-    (setq conds-str (remove nil (mapcar #'expr-to-str conds)))
-    (setq facts-str (remove nil (mapcar #'expr-to-str facts)))
+    (setq conds-str (remove nil (mapcar (lambda (cond) (expr-to-str cond :^me ^me :^you ^you)) conds)))
+    (setq facts-str (remove nil (mapcar (lambda (fact) (expr-to-str fact :^me ^me :^you ^you)) facts)))
     (setq history-str (mapcar (lambda (turn) (list (string (first turn)) (words-to-str (second turn)))) history))
 
     ; Generate response
@@ -3447,14 +3677,15 @@
           (mapcar (lambda (example) (mapcar #'words-to-str example)) examples))
 
         ; Get any Eta utterances that came since the previous user utterance (if any)
-        (when (member *^you* history :key (lambda (x) (first x)))
+        (when (member ^you history :key (lambda (x) (first x)))
           (setq incomplete-utterances (mapcar #'second
-            (last history (position *^you* (reverse history) :key (lambda (x) (first x)))))))
+            (last history (position ^you (reverse history) :key (lambda (x) (first x)))))))
         
         ; Get utterance
         (setq utterance (get-gpt3-paraphrase conds-str facts-str examples-str
           (words-to-str prev-utterance)
           (words-to-str gist)
+          ^me ^you
           :incomplete-utterance (str-join (mapcar #'words-to-str incomplete-utterances) #\ )
           :mode mode)))
 
@@ -3463,15 +3694,23 @@
       (t
 
         ; Get utterance
-        (setq utterance (get-gpt3-response conds-str facts-str history-str :mode mode))))
+        (setq utterance (get-gpt3-response
+          conds-str
+          facts-str
+          history-str
+          ^me ^you
+          :mode mode))))
 
     ;; (format t "~%  * Generated utterance = ~a" utterance) ; DEBUGGING   
 
     ; Generate emotion tag for utterance (if enabled)
     ; If the gist clause already had an emotion specified, use that instead of generating tag
-    (when *emotions*
+    (when (is-emotion-mode *config-agent*)
       (if (null emotion)
-        (setq emotion (get-gpt3-emotion (words-to-str utterance) (last history-str 3))))
+        (setq emotion (get-gpt3-emotion
+          (words-to-str utterance)
+          (last history-str 3)
+          ^me ^you)))
       (setq utterance (cons emotion utterance)))
 
     ;; (format t "~%  * Generated utterance = ~a" utterance) ; DEBUGGING   
@@ -3639,7 +3878,7 @@
         (when (atom (car clause)) (setq clause (list clause))) ; in case no topic-key
         (when clause
           (setq keys (second clause))
-          (store-gist (car clause) keys (ds-gist-kb-user *ds*))
+          (store-gist (car clause) keys (ds-gist-kb-user (get-ds)))
           (push (car clause) facts))))
 
     ; Form thematic answer from input (if no specific facts are extracted)
@@ -3650,7 +3889,7 @@
         (when (atom (car clause)) (setq clause (list clause))) ; in case no topic-key
         (when clause
           (setq keys (second clause))
-          (store-gist (car clause) keys (ds-gist-kb-user *ds*))
+          (store-gist (car clause) keys (ds-gist-kb-user (get-ds)))
           (push (car clause) facts))))
 
     ; 'facts' should be a concatenation of the above results in the order in
@@ -3659,7 +3898,7 @@
     (setq gist-clauses (remove-duplicates (remove nil (reverse facts)) :test #'equal))
 
     ; If using GPT3 gist interpretation mode, use GPT3 to extract additional gist clause(s).
-    (when (equal *gist-interpreter* 'GPT3)
+    (when (equal (get-interpretation-mode *config-agent*) 'GPT3)
       (setq gist-clauses (append gist-clauses
         (form-gist-clauses-using-language-model words prior-gist-clause '^you))))
 
@@ -3693,7 +3932,7 @@
     (setq ulf (choose-result-for clause '*clause-semantics-tree*))
 
     ; If using BLLIP parser mode and no ULF, use parser to obtain ULF.
-    (when (equal *parser* 'BLLIP)
+    (when (equal (get-parser-mode *config-agent*) 'BLLIP)
       (setq ulf (parse-str-to-ulf-bllip (words-to-str clause))))
 
   ulf)
@@ -3751,9 +3990,9 @@
            (eval-truth-value (third wff))))
     ; (wff1 ** e) - check memory
     ((characterizes-prop? wff)
-      (get-from-memory wff *ds*))
+      (get-from-memory wff (get-ds)))
     ; Otherwise, check to see if wff is true in context
-    (t (get-from-context wff *ds*))
+    (t (get-from-context wff (get-ds)))
 )) ; END eval-truth-value
 
 
@@ -3844,7 +4083,7 @@
 ; the 'parts' list is returned (after updating 'time-last-used'). 
 ; The latency criterion uses the 'latency' property of 'rule-node' 
 ; jointly with the 'time-last-used' property and the global result 
-; count, (ds-count *ds*).
+; count, (ds-count (get-ds)).
 ;
 ; If the rule node has directive property :subtree, then 'pattern'
 ; will just be the name of another choice tree. If the latency 
@@ -3925,7 +4164,7 @@
 
     ; If latency is being enforced, skip rule if it was used too recently
     (when (and directive *use-latency*
-            (< (ds-count *ds*) (+ (get rule-node 'time-last-used)
+            (< (ds-count (get-ds)) (+ (get rule-node 'time-last-used)
                           (get rule-node 'latency))))
       (return-from choose-result-for1
         (choose-result-for1 clause parts (get rule-node 'next) visited-subtrees)))
@@ -3980,7 +4219,7 @@
       ; Recursively obtain a result from the choice tree specified via its
       ; root name, given as 'pattern'
       ((eq directive :subtree)
-        (setf (get rule-node 'time-last-used) (ds-count *ds*))
+        (setf (get rule-node 'time-last-used) (ds-count (get-ds)))
         (cond
           ; Pattern is wrong format
           ((not (atom pattern)) (return-from choose-result-for1 nil))
@@ -4002,7 +4241,7 @@
       ; some portion of 'clause', whose results should then be used
       ; (after re-tagging) in the recursive search.
       ((eq directive :subtree+clause)
-        (setf (get rule-node 'time-last-used) (ds-count *ds*))
+        (setf (get rule-node 'time-last-used) (ds-count (get-ds)))
         (setq newclause (fill-template (second pattern) parts))
         (return-from choose-result-for1
           (choose-result-for1 newclause nil (car pattern)
@@ -4073,7 +4312,7 @@
         (setq newclause (fill-template (second pattern) parts))
         (setq result (choose-result-for1 newclause nil (car pattern) visited-subtrees))
         (if (and result (not (equal (car result) :out)))
-          (setq result (coref-ulf result *ds*)))
+          (setq result (coref-ulf result (get-ds))))
         (return-from choose-result-for1 result))
 
       ;```````````````````````
@@ -4082,7 +4321,7 @@
       ; TODO: Implement coreference resolution (gist case)
       ((eq directive :gist-coref)
         (setq result (cons directive (fill-template pattern parts)))
-        (setf (get rule-node 'time-last-used) (ds-count *ds*))
+        (setf (get rule-node 'time-last-used) (ds-count (get-ds)))
         (setq result (coref-gist result))
         (return-from choose-result-for1 result))
 
@@ -4106,7 +4345,7 @@
           (setq result (cons (global-var-to-pred (car result)) (cdr result))))
         ; Update count and return result
         (setq result (cons directive result))
-        (setf (get rule-node 'time-last-used) (ds-count *ds*))
+        (setf (get rule-node 'time-last-used) (ds-count (get-ds)))
         (return-from choose-result-for1 result))
 
       ; A directive is not recognized

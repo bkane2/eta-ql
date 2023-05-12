@@ -15,79 +15,6 @@
 
 
 
-(defun preprocess-ulf-pronouns-for-prompt1 (ulf)
-;``````````````````````````````````````````````````
-; Wrapper function for preprocess-ulf-pronouns-for-prompt
-;
-  (first (preprocess-ulf-pronouns-for-prompt ulf))
-) ; END preprocess-ulf-pronouns-for-prompt1
-
-
-
-(defun preprocess-ulf-pronouns-for-prompt (ulf &key me-pron you-pron)
-;``````````````````````````````````````````````````````````````````````
-; Preprocess a ULF for prompt generation by replacing indexical variables
-; ^me and ^you with either the shortname of the corresponding agent, or
-; the appropriate anaphoric pronoun if the name has previously been used.
-;
-; TODO: this function is a bit messy; it should be optimized in the future.
-;
-  (cond
-    ; If ^me is encountered as an object (non-car of a list),
-    ; replace with them/her/him (if anaphoric) or the value of ^me.
-    ((equal ulf '^me)
-      (list (if me-pron
-        (get-pron-case *^me* 'obj)
-        (intern (shortname *^me* :handle-acronyms t)))
-      t you-pron))
-    ; If ^you is encountered as an object (non-car of a list),
-    ; replace with them/her/him (if anaphoric) or the value of ^you.
-    ((equal ulf '^you)
-      (list (if you-pron
-        (get-pron-case *^you* 'obj)
-        (intern (shortname *^you* :handle-acronyms t)))
-      me-pron t))
-    ; Non-indexical atom.
-    ((atom ulf)
-      (list ulf me-pron you-pron))
-    ; If ^me is encountered as a subject (car of a list),
-    ; replace with they/she/he (if anaphoric) or the value of ^me.
-    ((equal (car ulf) '^me)
-      (list (cons (if me-pron
-              (get-pron-case *^me* 'subj)
-              (intern (shortname *^me* :handle-acronyms t)))
-        (first (preprocess-ulf-pronouns-for-prompt (cdr ulf) :me-pron t :you-pron you-pron)))
-      t you-pron))
-    ; If ^you is encountered as a subject (car of a list),
-    ; replace with they/she/he (if anaphoric) or the value of ^you.
-    ((equal (car ulf) '^you)
-      (list (cons (if you-pron
-              (get-pron-case *^you* 'subj)
-              (intern (shortname *^you* :handle-acronyms t)))
-        (first (preprocess-ulf-pronouns-for-prompt (cdr ulf) :me-pron me-pron :you-pron t)))
-      me-pron t))
-    ; If possessive subject with ^me and anaphoric, replace with their/her/his.
-    ((and (equal (car ulf) '(^me 's)) me-pron)
-      (list (cons (get-pron-case *^me* 'poss)
-        (first (preprocess-ulf-pronouns-for-prompt (cdr ulf) :me-pron t :you-pron you-pron)))
-      t you-pron))
-    ; If possessive subject with ^you and anaphoric, replace with their/her/his.
-    ((and (equal (car ulf) '(^you 's)) you-pron)
-      (list (cons (get-pron-case *^you* 'poss)
-        (first (preprocess-ulf-pronouns-for-prompt (cdr ulf) :me-pron me-pron :you-pron t)))
-      me-pron t))
-    ; Otherwise, recur on each element in list
-    (t (list (mapcar (lambda (part)
-        (let ((result (preprocess-ulf-pronouns-for-prompt part :me-pron me-pron :you-pron you-pron)))
-          (setq me-pron (second result))
-          (setq you-pron (third result))
-          (first result)))
-        ulf)
-      me-pron you-pron)))
-) ; END preprocess-ulf-pronouns-for-prompt
-
-
-
 (defun generate-prompt-preprocess-history (history)
 ;```````````````````````````````````````````````````
 ; Preprocesses dialogue history into a single string.
@@ -102,8 +29,8 @@
 
 
 
-(defun generate-prompt-preprocess-paraphrase-examples (examples)
-;``````````````````````````````````````````````````````````````````
+(defun generate-prompt-preprocess-paraphrase-examples (examples ^me ^you)
+;`````````````````````````````````````````````````````````````````````````
 ; Preprocesses a list of examples into a single string.
 ; Examples is a list of 3-tuples of strings.
 ; 
@@ -115,9 +42,9 @@
         (format nil "~a " (generate-prompt-turn-start "Person B" :short nil))
         (second example)
         "\"[N]"
-        (format nil "~a " (generate-prompt-turn-start (string *^you*)))
+        (format nil "~a " (generate-prompt-turn-start (string ^you)))
         (first example)
-        (format nil "~a " (generate-prompt-turn-start (string *^me*)))
+        (format nil "~a " (generate-prompt-turn-start (string ^me)))
         (third example)))
       examples))
     (str-join example-strs "[N][N]")
@@ -144,7 +71,7 @@
 
 
 
-(defun generate-prompt-emotion (utterance history emotions)
+(defun generate-prompt-emotion (utterance history ^me ^you emotions)
 ;``````````````````````````````````````````````````````````````````````````````````
 ; Generates a GPT-3 prompt for classifying an utterance string as one of the emotions in
 ; emotions (a list of strings), given a dialogue history (a list of strings).
@@ -152,12 +79,12 @@
   (let (prompt)
     (setq prompt
       (format nil "From the following list, which emotional state most closely describes ~a's feelings?[N]"
-        (shortname (string *^me*))))
+        (shortname (string ^me))))
     (setq prompt (concatenate 'string prompt
       (str-join emotions ", ")
       "[N][N]"
       (generate-prompt-preprocess-history history)
-      (generate-prompt-turn-start (string *^me*))
+      (generate-prompt-turn-start (string ^me))
       " "
       utterance
       "[N][N]Emotional state:"))
@@ -165,8 +92,8 @@
 
 
 
-(defun generate-prompt-paraphrase (conds facts examples prev-utterance gist-clause incomplete-utterance mode)
-;```````````````````````````````````````````````````````````````````````````````````````````````````````````````
+(defun generate-prompt-paraphrase (conds facts examples prev-utterance gist-clause incomplete-utterance ^me ^you mode)
+;``````````````````````````````````````````````````````````````````````````````````````````````````````````````````````
 ; Generates a GPT-3 prompt for paraphrasing from facts, which is a list of strings,
 ; a list of examples (3-tuples of strings), a previous utterance string, and a
 ; gist-clause string.
@@ -174,11 +101,11 @@
 ; response for GPT-3 to continue to fill in.
 ;
   (let (prompt)
-    (setq prompt (format nil "~:(~a~) is having a conversation with ~:(~a~). " *^you* *^me*))
+    (setq prompt (format nil "~:(~a~) is having a conversation with ~:(~a~). " ^you ^me))
     (setq prompt (concatenate 'string prompt (str-join conds " ")))
     (setq prompt (concatenate 'string prompt
       (format nil "[N][N]Rewrite the following conversations as conversations between ~a and ~a:"
-        (shortname (string *^you*)) (shortname (string *^me*)))))
+        (shortname (string ^you)) (shortname (string ^me)))))
 
     (when facts
       (setq prompt (concatenate 'string prompt
@@ -195,7 +122,7 @@
     (setq prompt (concatenate 'string prompt
       "[N][N]"
       ; Add examples to prompt
-      (generate-prompt-preprocess-paraphrase-examples examples)
+      (generate-prompt-preprocess-paraphrase-examples examples ^me ^you)
       "[N][N]"
       ; Add prev-utterance and gist-clause to prompt
       (format nil "\"~a " (generate-prompt-turn-start "Person A" :short nil :newline nil))
@@ -203,9 +130,9 @@
       (format nil "~a " (generate-prompt-turn-start "Person B" :short nil))
       gist-clause
       "\"[N]"
-      (format nil "~a " (generate-prompt-turn-start (string *^you*)))
+      (format nil "~a " (generate-prompt-turn-start (string ^you)))
       prev-utterance
-      (generate-prompt-turn-start (string *^me*))))
+      (generate-prompt-turn-start (string ^me))))
     (when incomplete-utterance
       (setq prompt (concatenate 'string prompt " " incomplete-utterance)))
     prompt
@@ -213,15 +140,15 @@
 
 
 
-(defun generate-prompt-unconstrained (conds facts history mode)
-;````````````````````````````````````````````````````````````````
+(defun generate-prompt-unconstrained (conds facts history ^me ^you mode)
+;````````````````````````````````````````````````````````````````````````
 ; Generates a GPT-3 prompt for unconstrained generation from conds,
 ; which is a list of strings; facts, which is a list of strings;
 ; and history, which is a list of lists (agent turn) where agent and
 ; turn are both strings.
 ;
   (let (prompt)
-    (setq prompt (format nil "Write a conversation between ~:(~a~) and ~:(~a~). " *^you* *^me*))
+    (setq prompt (format nil "Write a conversation between ~:(~a~) and ~:(~a~). " ^you ^me))
     (setq prompt (concatenate 'string prompt (str-join conds " ")))
 
     (when facts
@@ -238,15 +165,15 @@
 
     (setq prompt (concatenate 'string prompt "[N]"
       ; Add initial greeting from user to prompt to calibrate GPT-3
-      (format nil "~a Hi, ~a." (generate-prompt-turn-start (string *^you*)) (shortname (string *^me*)))
+      (format nil "~a Hi, ~a." (generate-prompt-turn-start (string ^you)) (shortname (string ^me)))
       ; If the initial dialogue turn is not Eta's, add initial greeting from Eta to calibrate GPT-3
-      (if (not (equal (first (car history)) (string *^me*)))
-        (format nil "~a Hi, ~a." (generate-prompt-turn-start (string *^me*)) (shortname (string *^you*)))
+      (if (not (equal (first (car history)) (string ^me)))
+        (format nil "~a Hi, ~a." (generate-prompt-turn-start (string ^me)) (shortname (string ^you)))
         "")
       (if history "[N]" "")
       ; TODO: only add the second line by Sophie if not detected in conversation log
       (generate-prompt-preprocess-history history)
-      (generate-prompt-turn-start (string *^me*))))
+      (generate-prompt-turn-start (string ^me))))
     prompt
 )) ; END generate-prompt-unconstrained
 
@@ -286,7 +213,7 @@
 
 
 
-(defun get-gpt3-emotion (utterance history &key (emotions *emotions-list*))
+(defun get-gpt3-emotion (utterance history ^me ^you &key (emotions *emotions-list*))
 ;`````````````````````````````````````````````````````````````````````````````````````````````````````````
 ; Uses GPT-3 to classify the emotion of an utterance as one of the given emotions.
 ;
@@ -294,11 +221,11 @@
     (setq emotions (mapcar (lambda (e)
         (format nil "~:(~a~)" (coerce (cdr (butlast (explode e))) 'string)))
       emotions))
-    (setq prompt (generate-prompt-emotion utterance history emotions))
+    (setq prompt (generate-prompt-emotion utterance history ^me ^you emotions))
     ;; (format t "~%  gpt-3 prompt:~%-------------~%~a~%-------------~%" prompt) ; DEBUGGING
     (setq stop-seq (vector
-      (generate-prompt-turn-start (string *^you*))
-      (generate-prompt-turn-start (string *^me*))))
+      (generate-prompt-turn-start (string ^you))
+      (generate-prompt-turn-start (string ^me))))
     ;; (format t "~%  gpt-3 stop-seq: ~s~%" stop-seq) ; DEBUGGING
     (setq generated (gpt3-generate (get-api-key "openai") prompt :stop-seq stop-seq))
     ;; (format t "~%  gpt-3 response:~%-------------~%~a~%-------------~%" generated) ; DEBUGGING
@@ -310,8 +237,8 @@
 
 
 
-(defun get-gpt3-paraphrase (conds facts examples prev-utterance gist-clause &key incomplete-utterance mode)
-;```````````````````````````````````````````````````````````````````````````````````````````````````````````
+(defun get-gpt3-paraphrase (conds facts examples prev-utterance gist-clause ^me ^you &key incomplete-utterance mode)
+;```````````````````````````````````````````````````````````````````````````````````````````````````````````````````
 ; Generates a GPT-3 paraphrase given a prompt containing conds, which is a list of strings to
 ; use in conditioning the LLM; facts, which is a list of strings that the LLM is prompted to
 ; use in response generation; examples, which is a list of 3-tuples of strings representing example
@@ -326,11 +253,11 @@
 ; response type.
 ;
   (let (prompt stop-seq generated)
-    (setq prompt (generate-prompt-paraphrase conds facts examples prev-utterance gist-clause incomplete-utterance mode))
+    (setq prompt (generate-prompt-paraphrase conds facts examples prev-utterance gist-clause incomplete-utterance ^me ^you mode))
     ;; (format t "~%  gpt-3 prompt:~%-------------~%~a~%-------------~%" prompt) ; DEBUGGING
     (setq stop-seq (vector
-      (generate-prompt-turn-start (string *^you*))
-      (generate-prompt-turn-start (string *^me*))
+      (generate-prompt-turn-start ^you)
+      (generate-prompt-turn-start ^me)
       "Person A"
       "Person B"))
     ;; (format t "~%  gpt-3 stop-seq: ~s~%" stop-seq) ; DEBUGGING
@@ -341,8 +268,8 @@
 
 
 
-(defun get-gpt3-response (conds facts history &key mode)
-;````````````````````````````````````````````````````````
+(defun get-gpt3-response (conds facts history ^me ^you &key mode)
+;`````````````````````````````````````````````````````````````````
 ; Generates a GPT-3 response from conds, which is a list
 ; of strings to use in conditioning the LLM; facts, which
 ; is a list of strings that the LLM is prompted to use in
@@ -355,11 +282,11 @@
 ; response type.
 ;
   (let (prompt stop-seq generated)
-    (setq prompt (generate-prompt-unconstrained conds facts history mode))
+    (setq prompt (generate-prompt-unconstrained conds facts history ^me ^you mode))
     ;; (format t "~%  gpt-3 prompt:~%-------------~%~a~%-------------~%" prompt) ; DEBUGGING
     (setq stop-seq (vector
-      (generate-prompt-turn-start (string *^you*))
-      (generate-prompt-turn-start (string *^me*))))
+      (generate-prompt-turn-start ^you)
+      (generate-prompt-turn-start ^me)))
     ;; (format t "~%  gpt-3 stop-seq: ~s~%" stop-seq) ; DEBUGGING
     (setq generated (gpt3-generate (get-api-key "openai") prompt :stop-seq stop-seq))
     ;; (format t "~%  gpt-3 response:~%-------------~%~a~%-------------~%" generated) ; DEBUGGING

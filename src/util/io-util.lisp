@@ -6,14 +6,39 @@
 
 (in-package :eta)
 
-(defun read-from-system (system)
-;``````````````````````````````````
+(defun read-new-sessions (fname)
+;`````````````````````````````````
+; Reads a list of new sessions from a given file.
+;
+  (setq *new-sessions* nil)
+  (load fname)
+  (if *new-sessions*
+    (with-open-file (outfile fname
+      :direction :output :if-exists :supersede :if-does-not-exist :create)))
+  (remove-if-not #'stringp *new-sessions*)
+) ; END read-new-sessions
+
+
+
+(defun read-config (fname)
+;`````````````````````````````
+; Reads a config file (expects list of alternating keyword arguments).
+;
+  (setq *config* nil)
+  (load fname)
+  *config*
+) ; END read-config
+
+
+
+(defun read-from-system (system path)
+;`````````````````````````````````````
 ; Reads input (as a list of propositions) from given subsystem.
 ;
   (case system
-    (|Audio| (read-audio))
+    (|Audio| (read-audio path))
     (|Terminal| (read-terminal))
-    (otherwise (read-subsystem system)))
+    (otherwise (read-subsystem system path)))
 ) ; END read-from-system
 
 
@@ -33,8 +58,8 @@
 
 
 
-(defun read-audio ()
-;`````````````````````
+(defun read-audio (path)
+;````````````````````````
 ; Reads input from |Audio| subsystem (i.e., (^you say-to.v ^me '(...)), or
 ; possibly (^you say-to.v ^me "...")) propositions from io/in/Audio.lisp.
 ; NOTE: previously in eta.lisp, it would call detach-final-punctuation
@@ -43,9 +68,9 @@
 ; 
   ; Read from Audio input
   (setq *input* nil)
-  (load (get-io-path "in/Audio.lisp"))
+  (load (concatenate 'string path "in/Audio.lisp"))
   (if *input*
-    (with-open-file (outfile (get-io-path "in/Audio.lisp")
+    (with-open-file (outfile (concatenate 'string path "in/Audio.lisp")
       :direction :output :if-exists :supersede :if-does-not-exist :create)))
   (mapcar (lambda (wff)
       ; If say-to.v argument given in string form, parse it into list form
@@ -57,15 +82,15 @@
 
 
 
-(defun read-subsystem (system &key block)
-;``````````````````````````````````````````
+(defun read-subsystem (system path &key block)
+;````````````````````````````````````````````````
 ; Reads input ULF propositions from io/in/<system>.lisp.
 ; If :block t is given, loop until a non-nil value is set for *input*.
 ; NOTE: 'None is reserved as a special value, which causes the function
 ; to return nil (nil itself cannot be used, since otherwise the program
 ; would be unable to distinguish from cases where no input is given yet)
 ;
-  (let ((fname (concatenate 'string (get-io-path "in/") (string system) ".lisp")))
+  (let ((fname (concatenate 'string path "in/" (string system) ".lisp")))
   (setq *input* nil)
   (cond
     ; If :block t is given, loop until non-nil input
@@ -82,12 +107,12 @@
 
 
 
-(defun write-subsystem (output system)
-;`````````````````````````````````````````
+(defun write-subsystem (output system path)
+;```````````````````````````````````````````
 ; Writes output/"query" ULF propositions to io/out/<system>.lisp.
 ; output should be a list of propositions.
 ;
-  (let ((fname (concatenate 'string (get-io-path "out/") (string system) ".lisp")))
+  (let ((fname (concatenate 'string path "out/" (string system) ".lisp")))
     (with-open-file (outfile fname
       :direction :output :if-exists :supersede :if-does-not-exist :create)
       (format outfile "(setq *output* '~s)" output))
@@ -95,35 +120,12 @@
 
 
 
-(defun user-log (logfile content)
-;`````````````````````````````````````
-; Logs some user data in the corresponding log file (i.e., text, gist, semantic, or pragmatic).
-; Temporarily disable pretty-printing so each line in the log file corresponds to a single turn.
-;
-  (let ((fname (concatenate 'string (get-io-path "user-log/") (string-downcase (string logfile)) ".txt")))
-    (setq *print-pretty* nil)
-    (with-open-file (outfile fname :direction :output :if-exists :append :if-does-not-exist :create)
-      (format outfile "~a~%" content))
-    (setq *print-pretty* t)
-)) ; END user-log
-
-
-
-(defun log-turn-write-all (ds)
-;``````````````````````````````
-; Logs all of the turns in the current conversation log.
-;
-  (mapcar #'log-turn-write (reverse (ds-conversation-log ds)))
-) ; END log-turn-write-all
-
-
-
-(defun log-turn-write (turn)
-;````````````````````````````
+(defun log-turn-write (turn path)
+;``````````````````````````````````
 ; Logs some a turn in the conversation-log directory.
 ; Temporarily disable pretty-printing so each line in the log file corresponds to a single turn.
 ;
-  (let* ((log-dir (get-io-path "conversation-log/"))
+  (let* ((log-dir (concatenate 'string path "conversation-log/"))
          (fname-text  (concatenate  'string log-dir "text.txt"))
          (fname-text-r (concatenate 'string log-dir "text-readable.txt"))
          (fname-gist  (concatenate  'string log-dir "gist.txt"))
@@ -165,8 +167,8 @@
 
 
 
-(defun say-words (wordlist)
-;````````````````````````````
+(defun say-words (wordlist path &key (output-count 0))
+;```````````````````````````````````````````````````````
 ; This is intended for th *live* = T mode of operation, i.e., I/O
 ; is via the virtual agent; (but the output is printed as well).
 ; For terminal mode only, we use 'print-words'.
@@ -181,17 +183,11 @@
       (push " " wordstring))
     (setq wordstring (reverse (cdr wordstring)))
     (setq wordstring (eval (cons 'concatenate (cons ''string wordstring))))
-
-    ; Increment output number
-    (setq *output-count* (1+ *output-count*))
 	  
     ; Output words
-    (with-open-file (outfile (get-io-path "output.txt")
+    (with-open-file (outfile (concatenate 'string path "output.txt")
       :direction :output :if-exists :append :if-does-not-exist :create)
-      (format outfile "~%#~D: ~a" *output-count* wordstring))
-
-    ; Add words to output buffer
-    (push wordlist *output-buffer*)
+      (format outfile "~%#~D: ~a" output-count wordstring))
 
     ; Also write ETA's words to standard output:
     (format t "~% ... ")
@@ -205,25 +201,24 @@
 
 
 
-(defun write-output-buffer ()
-;````````````````````````````````
+(defun write-output-buffer (output-buffer path)
+;```````````````````````````````````````````````
 ; Writes buffered output to turn-output.txt, as well as any emotion
 ; tags to turn-emotion.txt.
 ;
-  (let ((buffer (reverse *output-buffer*)) (output "") (emotion "neutral"))
+  (let ((buffer (reverse output-buffer)) (output "") (emotion "neutral"))
     (setq output (str-join (mapcar (lambda (wordlist)
         (words-to-str (untag-emotions wordlist)))
       buffer) " "))
     (dolist (wordlist buffer)
       (if (equal emotion "neutral")
         (setq emotion (get-emotion wordlist))))
-    (with-open-file (outfile (get-io-path "turn-output.txt")
+    (with-open-file (outfile (concatenate 'string path "turn-output.txt")
       :direction :output :if-exists :supersede :if-does-not-exist :create)
       (format outfile "~a" output))
-    (with-open-file (outfile (get-io-path "turn-emotion.txt")
+    (with-open-file (outfile (concatenate 'string path "turn-emotion.txt")
       :direction :output :if-exists :supersede :if-does-not-exist :create)
       (format outfile "~a" emotion))
-    (setq *output-buffer* nil)
 )) ; END write-output-buffer
 
 
@@ -253,12 +248,12 @@
 
 
 (defun error-message (str mode)
-;````````````````````````````````
-; Print error message to the console, and if in live mode, to output.txt
+;`````````````````````````````````````
+; Print error message to the console, and if in live mode, to error.txt
 ;
   (format t "~a~%" str)
   (if mode
-    (with-open-file (outfile (get-io-path "output.txt")
+    (with-open-file (outfile (concatenate 'string *io-dir* "error.txt")
       :direction :output :if-exists :append :if-does-not-exist :create)
       (format outfile "~%#: ~a" str)))
 ) ; END error-message
