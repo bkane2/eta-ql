@@ -305,12 +305,7 @@
   ; Timer parameters. Each end up being set to current system time, meaning
   ; that time elapsed can be calculated by comparing the timer values to the
   ; system time at a future point.
-  (defparameter *flush-context-timer* (get-universal-time))
   (defparameter *expected-step-failure-timer* (get-universal-time))
-
-  ; The timer period (in seconds) that must be passed for Eta to flush context,
-  ; removing "instantaneous" telic verbs from context.
-  (defparameter *flush-context-period* 15)
 
   ; The certainty of an episode determines the timer period (in seconds) that must be
   ; passed for Eta to consider an expected episode failed and move on in the plan.
@@ -630,12 +625,6 @@
 ; known to be "instantaneous" telic predicates, e.g., saying, replying, moving, etc.
 ;
   (let (inputs)
-
-  ; Flush context of "instantaneous" telic verbs once timer passes a certain period.
-  (when (>= (- (get-universal-time) *flush-context-timer*) *flush-context-period*)
-    ;; (format t "FLUSHING CONTEXT~%") ; DEBUGGING
-    (flush-context)
-    (setq *flush-context-timer* (get-universal-time)))
 
   ; Cycle through all registered perception sources;
   ; for each observation, instantiate an episode and
@@ -2336,7 +2325,10 @@
 ; of the step), fail the step and proceed with the plan.
 ; Returns t if the plan should be advanced; nil otherwise.
 ;
-  (let (certainty)
+; Note: upon matching a fact in context, all "instantaneous" telic facts
+; are flushed from context.
+;
+  (let (certainty match)
 
     ; Write output buffer
     (when *output-buffer*
@@ -2352,7 +2344,10 @@
 
       ; Otherwise, inquire self about the truth of the immediately pending episode. Plan is advanced
       ; (and appropriate substitutions made) if the expected episode is determined to be true.
-      (t (inquire-truth-of-curr-step plan-step)))
+      (t
+        (setq match (inquire-truth-of-curr-step plan-step))
+        (if match (flush-context))
+        match))
 )) ; END process-expected-step
 
 
