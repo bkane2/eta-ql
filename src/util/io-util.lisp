@@ -154,8 +154,7 @@
 
 (defun log-turn-write (turn)
 ;````````````````````````````
-; Logs some a turn in the conversation-log directory, as well as the appropriate log directories
-; when in read-log mode.
+; Logs some a turn in the conversation-log directory.
 ; Temporarily disable pretty-printing so each line in the log file corresponds to a single turn.
 ;
   (let* ((instance-dir (format nil "~a/" *dialogue-instance*))
@@ -181,28 +180,6 @@
     (with-open-file (outfile fname-oblg   :direction :output :if-exists :append :if-does-not-exist :create)
       (format outfile "~s~%" (remove nil (dialogue-turn-obligations turn))))
     (setq *print-pretty* t))
-  ; Additionally write conversation log to appropriate log directories when in read-log mode.
-  (when *read-log*
-    (let ((fname-text (concatenate 'string "logs/logs_out/text/" (pathname-name *read-log*) ".txt"))
-          (fname-gist (concatenate 'string "logs/logs_out/gist/" (pathname-name *read-log*) ".txt"))
-          (fname-sem  (concatenate 'string "logs/logs_out/semantic/" (pathname-name *read-log*) ".txt"))
-          (fname-prag (concatenate 'string "logs/logs_out/pragmatic/" (pathname-name *read-log*) ".txt"))
-          (fname-oblg (concatenate 'string "logs/logs_out/obligations/" (pathname-name *read-log*) ".txt"))
-          (agent (if (equal (dialogue-turn-agent turn) *^me*)
-            (if (boundp '*session-id*) (string-upcase (string *session-id*)) "ETA")
-            "USER")))
-      (setq *print-pretty* nil)
-      (with-open-file (outfile fname-text :direction :output :if-exists :append :if-does-not-exist :create)
-        (format outfile "~a : ~s~%" agent (dialogue-turn-utterance turn)))
-      (with-open-file (outfile fname-gist :direction :output :if-exists :append :if-does-not-exist :create)
-        (format outfile "~a : ~s~%" agent (remove nil (remove-if #'nil-gist-clause? (dialogue-turn-gists turn)))))
-      (with-open-file (outfile fname-sem  :direction :output :if-exists :append :if-does-not-exist :create)
-        (format outfile "~a : ~s~%" agent (remove nil (dialogue-turn-semantics turn))))
-      (with-open-file (outfile fname-prag  :direction :output :if-exists :append :if-does-not-exist :create)
-        (format outfile "~s~%" (remove nil (dialogue-turn-pragmatics turn))))
-      (with-open-file (outfile fname-oblg  :direction :output :if-exists :append :if-does-not-exist :create)
-        (format outfile "~s~%" (remove nil (dialogue-turn-obligations turn))))
-      (setq *print-pretty* t)))
 ) ; END log-turn-write
 
 
@@ -307,134 +284,6 @@
             (format t "~% --- Warning: API key for ~a not found in ~a.~%" api fname)
             nil))))
 )) ; END get-api-key
-
-
-
-
-
-
-;; --------------------------------------------------
-;; The functions after this point need to be vetted.
-;; --------------------------------------------------
-
-
-
-
-
-(defun read-input-timeout (n)
-;``````````````````````````````
-; Reads terminal input for n seconds and returns accumulated string.
-;
-  (finish-output)
-  (let ((i 0) result)
-    (loop while (< i n) do
-      (sleep 1)
-      (if (listen) (setq result (cons " " (cons (read-line) result))))
-      (setq i (+ 1 i)))
-    (if (listen) (setq result (cons (read-line) result)))
-    (eval (append '(concatenate 'string) (reverse result))))
-) ; END read-input-timeout
-
-
-
-(defun read-log-contents (log)
-;```````````````````````````````
-; Reads the contents of a given log file and converts to list.
-;
-  (let (result)
-    (with-open-file (logfile log :if-does-not-exist :create)
-      (do ((l (read-line logfile) (read-line logfile nil 'eof)))
-          ((eq l 'eof) "Reached end of file.")
-        (setq result (concatenate 'string result " " l))))
-    (read-from-string (concatenate 'string "(" result ")")))
-) ; END read-log-contents
-
-
-
-(defun update-block-coordinates (moves)
-;````````````````````````````````````````
-; Given a list of moves (in sequential order), update *block-coordinates*. Return a list of
-; perceptions, i.e. the given moves combined with the current block coordinates.
-;
-  (mapcar (lambda (move)
-    (setq *block-coordinates* (mapcar (lambda (coordinate)
-        (if (equal (car move) (car coordinate))
-          (list (car coordinate) 'at-loc.p (cadar (cddadr move)))
-          coordinate))
-      *block-coordinates*))) moves)
-  (append *block-coordinates* moves)
-) ; END update-block-coordinates
-
-
-
-(defun process-and-increment-log ()
-;`````````````````````````````````````
-; Verifies the correctness of the current tuple of log (when applicable),
-; increments the log pointer, and stores a say-to.v episode containing the
-; user input in the next log entry.
-; TODO: any perceptions apart from the say-to.v act should also be stored in
-; context here (currently only select move.v observations are stored by the
-; respective blocks-world QA actions).
-;
-  ; Verify current tuple
-  (when (and (>= *log-ptr* 0) (> (length (nth *log-ptr* *log-contents*)) 1))
-    (if (not *log-answer*) (setq *log-answer* '(PARSE FAILURE \.)))
-    (verify-log *log-answer* (nth *log-ptr* *log-contents*) *read-log*)
-    (setq *log-answer* nil))
-  ; Increment log pointer
-  (setq *log-ptr* (1+ *log-ptr*))
-  ; Read off input of next tuple and store in context
-  (let (ep-name-new (log-input (if (>= *log-ptr* (length *log-contents*))
-                      (parse-chars (coerce "bye" 'list))
-                      (parse-chars (coerce (first (nth *log-ptr* *log-contents*)) 'list)))))
-    (setq log-input `(^you say-to.v ^me ',log-input))
-    (when log-input
-      (setq ep-name-new (store-new-contextual-facts (list log-input)))
-      (enqueue-in-buffer (list ep-name-new log-input) (buffers-perceptions (ds-buffers *ds*)))))
-) ; END process-and-increment-log
-
-
-
-(defun verify-log (answer-new turn-tuple filename)
-;```````````````````````````````````````````````````
-; Given Eta's answer for a turn, allow the user to compare to the answer in the log
-; and amend the correctness judgment for that turn. Output to the corresponding
-; filename in log_out/ directory.
-;
-  (let ((filename-out (concatenate 'string "logs/logs_out/" (pathname-name filename)))
-        (answer-old (parse-chars (coerce (third turn-tuple) 'list)))
-        (feedback-old (fourth turn-tuple)) feedback-new)
-    ;; (format t "/~a~%\\~a~%" answer-old answer-new)
-    (with-open-file (outfile filename-out :direction :output :if-exists :append :if-does-not-exist :create)
-      (cond
-        ; If answer is the same, just output without modification
-        ((equal answer-old answer-new)
-          (format outfile "(\"~a\" ~S \"~a\" ~a)~%" (first turn-tuple) (second turn-tuple) (third turn-tuple) (fourth turn-tuple)))
-        ; If question was marked as non-historical, also skip
-        ((member (fourth turn-tuple) '(XC XI XP XE))
-          (format outfile "(\"~a\" ~S \"~a\" ~a)~%" (first turn-tuple) (second turn-tuple) (third turn-tuple) (fourth turn-tuple)))
-        ; If "when" question with specific time, also skip
-        ((and (equal "when" (string-downcase (subseq (first turn-tuple) 0 4)))
-              (find-if (lambda (x) (member x '(zero one two three four five six seven eight nine ten eleven twelve thirteen
-                                               fourteen fifteen sixteen seventeen eighteen nineteen twenty thirty forty
-                                               fifty sixty seventy eighty ninety hundred))) answer-old))
-          (format outfile "(\"~a\" ~S \"~a\" ~a)~%" (first turn-tuple) (second turn-tuple) (third turn-tuple) (fourth turn-tuple)))
-        ; Otherwise, check the new output with the user and prompt them to change feedback
-
-        (t
-          (format t " ----------------------------------------------------------~%")
-          (format t "| A CHANGE WAS DETECTED IN LOG '~a':~%" (pathname-name filename))
-          (format t "| * question: ~a~%" (first turn-tuple))
-          (format t "| * old answer: ~a~%" answer-old)
-          (format t "| * old feedback: ~a~%" (fourth turn-tuple))
-          (format t "| * new answer: ~a~%" answer-new)
-          (format t "| > new feedback: ")
-          (finish-output) (setq feedback-new (read-from-string (read-line)))
-          (format t " ----------------------------------------------------------~%")
-          (if (not (member feedback-new '(C I P F E))) (setq feedback-new 'E))
-          (format outfile "(\"~a\" ~S \"~a\" ~a)~%"
-            (first turn-tuple) (second turn-tuple) (format nil "~{~a~^ ~}" answer-new) feedback-new)))))
-) ; END verify-log
 
 
 

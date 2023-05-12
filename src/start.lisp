@@ -48,14 +48,6 @@
   (ensure-directories-exist (get-io-path "conversation-log/"))
   (delete-directory (get-io-path "conversation-log/") :recursive t)
   (ensure-directories-exist (get-io-path "conversation-log/"))
-  (when *read-log-mode*
-    (ensure-directories-exist "./logs/")
-    (ensure-directories-exist "./logs/logs/")
-    (ensure-directories-exist "./logs/logs_out/")
-    (ensure-directories-exist "./logs/logs_out/text/")
-    (ensure-directories-exist "./logs/logs_out/gist/")
-    (ensure-directories-exist "./logs/logs_out/semantic/")
-    (ensure-directories-exist "./logs/logs_out/pragmatic/"))
   (ensure-directories-exist (get-io-path "embeddings/"))
   (ensure-directories-exist (get-io-path "embeddings/schemas/"))
 
@@ -202,34 +194,10 @@
           (error-message "Execution of Eta failed due to an internal error.")
           (values 0 c))))
 
-    ; Run Eta (read-log mode)
-    ;`````````````````````````
-    (*read-log-mode*
-      (let ((logs (if (stringp *read-log-mode*)
-                    (directory (concatenate 'string "logs/logs/" *read-log-mode*))
-                    (directory "logs/logs/*"))))
-        ; Create empty log_out file
-        (mapcar (lambda (log)
-          (with-open-file (outfile (pathname (concatenate 'string "logs/logs_out/" (pathname-name log)))
-            :direction :output :if-exists :supersede :if-does-not-exist :create))) logs)
-        ; Start eta using log
-        (mapcar (lambda (log)
-          (format t "==:: READING LOG ~a ::==~%" log)
-          (load-avatar-files *avatar*)
-          (eta :read-log log :subsystems-perception *subsystems-perception* :subsystems-specialist *subsystems-specialist*
-              :emotions *emotion-tags* :dependencies *dependencies* :model-names *model-names* :response-generator *generation-mode*
-              :gist-interpreter *interpretation-mode* :parser *parser-mode*)) logs)))
-
     ; Run Eta
     ;`````````````````````````
     (t (eta :subsystems-perception *subsystems-perception* :subsystems-specialist *subsystems-specialist*
             :emotions *emotion-tags* :dependencies *dependencies* :model-names *model-names* :response-generator *generation-mode*
             :gist-interpreter *interpretation-mode* :parser *parser-mode*)))
-
-
-  ;; ; Write user gist clauses to file
-  ;; ;````````````````````````````````````
-  ;; (print-gist-kb :filename
-  ;;   (ensure-directories-exist (concatenate 'string "./gist-kb/" *user-id* ".txt")))
 
 ) ; END start

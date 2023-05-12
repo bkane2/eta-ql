@@ -327,19 +327,9 @@
   ; Currently, this coefficient makes a certainty of ~0.632 correspond to 30 seconds.
   (defparameter *expected-step-failure-period-coefficient* 30)
 
-  ; If *read-log* is the name of some file (in logs/ directory), read and
-  ; emulate that file, allowing for user corrections and saving them in a file
-  ; of the same name in logs_out/ directory.
-  (defparameter *read-log* nil)
-
   ; If *emotions* is T, Eta will allow use of emotion tags at beginning of outputs.
   (defparameter *emotions* nil)
   (defparameter *emotions-list* '([NEUTRAL] [SAD] [HAPPY] [WORRIED] [ANGRY]))
-
-  ; Log contents and pointer corresponding to current position in log.
-  (defparameter *log-contents* nil)
-  (defparameter *log-answer* nil)
-  (defparameter *log-ptr* 0)
 
   ; The dialogue instance is used to keep track of multiple dialogue trajectories within
   ; a single session (in the case where the dialogue is rewound to a previous state), and
@@ -501,7 +491,7 @@
 
 (defun eta (&key (subsystems-perception '(|Terminal| |Audio|)) (subsystems-specialist '())
                  (dependencies nil)  (model-names nil) (response-generator 'RULE) (gist-interpreter 'RULE)
-                 (parser 'RULE) (emotions nil) (read-log nil)) ; {@}
+                 (parser 'RULE) (emotions nil)) ; {@}
 ;``````````````````````````````````````````````````````````````````````````````````````````````````````````
 ; Main program: Originally handled initial and final formalities,
 ; (now largely commented out) and controls the loop for producing,
@@ -514,16 +504,10 @@
   (validate-dependencies parser response-generator gist-interpreter)
 
   (init)
-  (setq *read-log* read-log)
   (setq *registered-systems-perception* subsystems-perception)
   (setq *registered-systems-specialist* subsystems-specialist)
   (setq *emotions* emotions)
   (setf (ds-count *ds*) 0) ; Number of outputs so far
-
-  (when *read-log*
-    (setq *log-contents* (read-log-contents *read-log*))
-    (setq *log-answer* nil)
-    (setq *log-ptr* -1))
 
   ; If have-eta-dialog.v is not present in schema library, return an error
   (when (null (get-stored-schema 'have-eta-dialog.v))
@@ -1751,10 +1735,6 @@
 
     (format t "answer to output: ~a~%" ans) ; DEBUGGING
 
-    ; If in read-log mode, append answer to list of new log answers
-    (when *read-log*
-      (setq *log-answer* ans))
-
     ; Create say-to.v subplan from answer
     (init-plan-from-episode-list (list :episodes (episode-var) (create-say-to-wff ans)))
 )) ; END plan-conditionally-saying
@@ -1792,10 +1772,6 @@
         (store-semantic-interpretation-characterizing-episode eta-semantics ep-name '^me '^you)))
 
     (format t "gist answer to output: ~a~%" ans) ; DEBUGGING
-
-    ; If in read-log mode, append answer gist to list of new log answers
-    (when *read-log*
-      (setq *log-answer* ans))
 
     ; Create paraphrase-to.v subplan from answer
     (init-plan-from-episode-list (list :episodes (episode-var) (create-paraphrase-to-wff ans)))
@@ -2411,14 +2387,6 @@
     ; Output prompt for external system to listen for user audio (but only once)
     (setq *output-listen-prompt* (if (= *output-listen-prompt* 0) 1 2))
 
-    ; If first time listening for user input for given episode, and in read-log mode,
-    ; read next tuple in log as input.
-    ; NOTE: the following code is only relevant if (*read-log-mode* t) is set in config.lisp.
-    ; TODO: this still isn't working; need to look into this more.
-    (when (and (= *output-listen-prompt* 1) *read-log*)
-      (process-and-increment-log)
-      (return-from process-expected-step nil))
-
     ; Write output buffer
     (when *output-buffer*
       (write-output-buffer))
@@ -2859,14 +2827,6 @@
   (let (object-locations ans var-bindings)
     (setq user-semantics (resolve-references user-semantics))
 
-    ; If in *read-log* debug mode, update stored block coordinates according to current log entry and store in context.
-    ; TODO: first might need to remove stored block coordinates from context.
-    (when *read-log*
-      (let ((perceptions (second (nth *log-ptr* *log-contents*))))
-        (if (not (listp perceptions)) (setq perceptions nil))
-        (remove-old-contextual-fact '(?x at-loc.p ?y))
-        (store-new-contextual-facts (update-block-coordinates (remove-if-not #'verb-phrase? perceptions)))))
-
     ; Get object locations from context
     (setq object-locations (get-from-context '(?x at-loc.p ?y)))
     ;; (format t "found object locations from context: ~a~%" object-locations) ; DEBUGGING
@@ -2891,13 +2851,6 @@
 ;
   (setq query (eval (resolve-references query)))
 
-  ; If in *read-log* debug mode, update stored block coordinates according to current log entry and store in context.
-  (when *read-log*
-    (let ((perceptions (second (nth *log-ptr* *log-contents*))))
-      (if (not (listp perceptions)) (setq perceptions nil))
-      (remove-old-contextual-fact '(?x at-loc.p ?y))
-      (store-new-contextual-facts (update-block-coordinates (remove-if-not #'verb-phrase? perceptions)))))
-
   ; Send query to external source
   (if system (write-subsystem (list query) system))
 ) ; END execute-seek-answer-from
@@ -2912,7 +2865,7 @@
   (let (ans var-bindings)
     ; Get answer from subsystem
     (setq ans (read-subsystem system :block t))
-    (if (or *read-log* (not (answer-list? ans))) (setq ans nil))
+    (if (not (answer-list? ans)) (setq ans nil))
     (if ans (setq ans `(quote ,ans)))
 
     (format t "received answer: ~a~% (for variable ~a)~%" ans ans-var) ; DEBUGGING
