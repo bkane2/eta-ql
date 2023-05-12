@@ -4,9 +4,6 @@
 ;; Contains utility functions for creating and manipulating a timegraph
 ;; data structure for Eta dialogues, using the timegraph package.
 ;;
-;; Most of the functions defined here check the global *dependencies* variable to
-;; ensure that the timegraph is only used if Eta has the timegraph package available.
-;;
 
 (in-package :eta)
 
@@ -14,8 +11,7 @@
 ;``````````````````````````````
 ; Creates and returns a new timegraph structure
 ;
-  (when (member "timegraph" *dependencies* :test #'equal)
-    (setf (ds-tg *ds*) (timegraph:make-timegraph)))
+  (setf (ds-tg *ds*) (timegraph:make-timegraph))
 ) ; END construct-timegraph
 
 
@@ -28,8 +24,7 @@
 ; multiple dialogues, the name and temporal relations between the dialogue episode
 ; will need to be modified.
 ;
-  (when (member "timegraph" *dependencies* :test #'equal)
-    (timegraph:assert-prop `(,ep-name :during E) (ds-tg *ds*)))
+  (timegraph:assert-prop `(,ep-name :during E) (ds-tg *ds*))
 ) ; END add-episode-to-timegraph
 
 
@@ -62,9 +57,8 @@
 ; time record structure. This requires converting the record structure to
 ; a :local-time object.
 ;
-  (when (member "timegraph" *dependencies* :test #'equal)
-    (timegraph:update-lower-bound-inst ep-name
-      (time-record-structure-to-timestamp time-record) (ds-tg *ds*)))
+  (timegraph:update-lower-bound-inst ep-name
+    (time-record-structure-to-timestamp time-record) (ds-tg *ds*))
 ) ; END update-lower-bound-timegraph
 
 
@@ -75,7 +69,6 @@
 ; time record structure. This requires converting the record structure to
 ; a :local-time object.
 ;
-  (when (member "timegraph" *dependencies* :test #'equal)
-    (timegraph:update-upper-bound-inst ep-name
-      (time-record-structure-to-timestamp time-record) (ds-tg *ds*)))
+  (timegraph:update-upper-bound-inst ep-name
+    (time-record-structure-to-timestamp time-record) (ds-tg *ds*))
 ) ; END update-lower-bound-timegraph

@@ -210,9 +210,7 @@
 ; For converting a ULF response to a surface form response via the ulf2english library.
 ;
   ;; (format t "converting to english: ~a~%" ulf) ; DEBUGGING
-  (if (member "ulf2english" *dependencies* :test #'equal)
-    (str-to-output (ulf2english:ulf2english ulf :add-commas t))
-    '(Unable to generate output \: ulf2english dependency not enabled \.))
+  (str-to-output (ulf2english:ulf2english ulf :add-commas t))
 ) ; END ulf-to-english
 
 
@@ -222,8 +220,7 @@
 ; presupposition by negating it.
 ;
   (let ((presupposition nil))
-    (if (member "ulf-pragmatics" *dependencies* :test #'equal)
-      (setq presupposition (ulf-pragmatics:get-wh-question-presupposition ulf :calling-package *package*)))
+    (setq presupposition (ulf-pragmatics:get-wh-question-presupposition ulf :calling-package *package*))
     (format t "presupposition: ~a~%" presupposition) ; DEBUGGING
     (negate-wh-question-presupposition (normalize-wh-question-presupposition (remove-adv-e presupposition))))
 ) ; END respond-to-presupposition

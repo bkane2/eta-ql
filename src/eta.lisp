@@ -265,10 +265,9 @@
   ; Load initial knowledge (if any)
   (when (boundp '*init-knowledge*)
     (mapcar #'store-in-kb *init-knowledge*)
-    ; If config includes information-retrieval package, embed and dump initial knowledge
-    (when (member "information-retrieval" *dependencies* :test #'string-equal)
-      (precompute-knowledge-embeddings *init-knowledge*)
-      (precompute-schema-embeddings (get-schemas-of-type 'epi-schema))))
+    ; Embed and dump initial knowledge
+    (precompute-knowledge-embeddings *init-knowledge*)
+    (precompute-schema-embeddings (get-schemas-of-type 'epi-schema)))
 
   ; Initialize time
   (setf (ds-time *ds*) 'NOW0)
@@ -422,27 +421,25 @@
   ;; (when (or (equal *response-generator* 'GPT3) (equal *gist-interpreter* 'GPT3))
   ;;   (gpt3-shell:init (get-api-key "openai")))
 
-  ; Initialize information-retrieval if among dependencies (prevents delay on first invocation)
-  (when (member "information-retrieval" *dependencies* :test #'string-equal)
-    ; Set correct model paths if custom model paths are given
-    (dolist (model *model-names*)
-      (when (equal (car model) "information-retrieval")
-        (dolist (submodel (cdr model))
-          (when (equal '(:api t) (member :api submodel))
-            (when (null (get-api-key "huggingface"))
-              (format t "~% --- Warning: Using API for information-retrieval requires a valid")
-              (format t "~%              HuggingFace API key to be provided in config/keys/huggingface.txt.~%"))
-            (information-retrieval:set-api t))
-          (cond
-            ((equal (first submodel) "sentence-transformer")
-              (information-retrieval:set-model (second submodel)))
-            ((equal (first submodel) "cross-encoder")
-              (information-retrieval:set-cross-encoder (second submodel)))))))
-    (information-retrieval:init :api-key (get-api-key "huggingface")))
+  ; Initialize information-retrieval (prevents delay on first invocation), and set
+  ; correct model paths if custom model paths are given
+  (dolist (model *model-names*)
+    (when (equal (car model) "information-retrieval")
+      (dolist (submodel (cdr model))
+        (when (equal '(:api t) (member :api submodel))
+          (when (null (get-api-key "huggingface"))
+            (format t "~% --- Warning: Using API for information-retrieval requires a valid")
+            (format t "~%              HuggingFace API key to be provided in config/keys/huggingface.txt.~%"))
+          (information-retrieval:set-api t))
+        (cond
+          ((equal (first submodel) "sentence-transformer")
+            (information-retrieval:set-model (second submodel)))
+          ((equal (first submodel) "cross-encoder")
+            (information-retrieval:set-cross-encoder (second submodel)))))))
+  (information-retrieval:init :api-key (get-api-key "huggingface"))
 
-  ; Initialize ulf2english if among dependencies (prevents delay on first invocation)
-  (when (member "ulf2english" *dependencies* :test #'string-equal)
-    (ulf2english:ulf2english '(this.pro ((pres be.v) (= (a.d (test.n |ULF|.n)))))))
+  ; Initialize ulf2english (prevents delay on first invocation)
+  (ulf2english:ulf2english '(this.pro ((pres be.v) (= (a.d (test.n |ULF|.n))))))
 
   ; Initialize lenulf if among dependencies (prevents delay on first invocation)
   (when (equal *parser* 'BLLIP)
@@ -455,7 +452,7 @@
 
 
 (defun eta (&key (subsystems-perception '(|Terminal| |Audio|)) (subsystems-specialist '())
-                 (dependencies nil)  (model-names nil) (response-generator 'RULE) (gist-interpreter 'RULE)
+                 (model-names nil) (response-generator 'RULE) (gist-interpreter 'RULE)
                  (parser 'RULE) (emotions nil)) ; {@}
 ;``````````````````````````````````````````````````````````````````````````````````````````````````````````
 ; Main program: Originally handled initial and final formalities,
@@ -464,7 +461,6 @@
 ; annotating inputs & producing outputs, but with some subplan
 ; formation, gist clause formation, etc.).
 ;
-  (setq *dependencies* dependencies)
   (setq *model-names* model-names)
   (validate-dependencies parser response-generator gist-interpreter)
 
@@ -2787,9 +2783,7 @@
     ;; (format t "found object locations from context: ~a~%" object-locations) ; DEBUGGING
 
     ; Determine answers by recalling from history
-    (if (subsetp '("ulf-lib" "ulf2english" "ulf-pragmatics" "timegraph") *dependencies* :test #'equal)
-      (setq ans `(quote ,(recall-answer object-locations (eval user-semantics))))
-      (setq ans '()))
+    (setq ans `(quote ,(recall-answer object-locations (eval user-semantics))))
     (format t "recalled answer: ~a~%" ans) ; DEBUGGING
 
     ; Bind ans to variable given in plan (e.g. ?ans-relations)
@@ -3274,7 +3268,7 @@
     )
 
     ; Get relevant habitual/event schema knowledge
-    (when (and (member 'epi-schemas types) (member "information-retrieval" *dependencies* :test #'string-equal))
+    (when (member 'epi-schemas types)
       (setq relevant-epi-schemas (reverse (retrieve-relevant-epi-schemas query-str)))
 
       (format t "~%  * Generating response using retrieved epi-schemas~%      (from \"~a\"):~%   <~a> "
@@ -3289,7 +3283,7 @@
     )
 
     ; Get relevant episodic memory
-    (when (and (member 'memory types) (member "information-retrieval" *dependencies* :test #'string-equal))
+    (when (member 'memory types)
       (setq relevant-memory (reverse (retrieve-relevant-knowledge-from-kb query-str)))
 
       (format t "~%  * Generating response using retrieved facts~%      (from \"~a\"):~%   ~a " query-str relevant-memory) ; DEBUGGING

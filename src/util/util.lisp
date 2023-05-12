@@ -3065,8 +3065,7 @@
 ; Converts a ULF to a string, replacing indexical
 ; pronouns and possessives.
 ;
-  (if (member "ulf2english" *dependencies* :test #'equal)
-    (ulf2english:ulf2english (preprocess-ulf-pronouns-for-prompt1 ulf)))
+  (ulf2english:ulf2english (preprocess-ulf-pronouns-for-prompt1 ulf))
 ) ; END ulf-to-str
 
 

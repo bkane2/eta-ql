@@ -154,24 +154,6 @@
     (setq *user-name* "Test User"))
 
 
-  ; Validate dependency settings
-  ;````````````````````````````````
-  ; If GPT3 generation/interpretation mode and GPT3-shell not provided as a dependency, print warning and change mode to RULE.
-  (when (and (or (equal *generation-mode* 'GPT3) (equal *interpretation-mode* 'GPT3))
-            (not (member "gpt3-shell" *dependencies* :test #'equal)))
-      (format t "~% --- Warning: GPT3 generation/interpretation mode requires gpt3-shell to be listed as a dependency in the config file.")
-      (format t "~%              Changing generation/interpretation mode to RULE.~%")
-      (setq *generation-mode* 'RULE)
-      (setq *interpretation-mode* 'RULE))
-
-  ; If BLLIP parser mode and lenulf + standardize-ulf are not provided as dependencies, print warning and change mode to RULE.
-  (when (and (equal *parser-mode* 'BLLIP) (not (member "lenulf" *dependencies* :test #'equal))
-                                          (not (member "standardize-ulf" *dependencies* :test #'equal)))
-      (format t "~% --- Warning: BLLIP parser mode requires lenulf and standardize-ulf to be listed as dependencies in the config file.")
-      (format t "~%              Changing parser mode to RULE.~%")
-      (setq *parser-mode* 'RULE))
-
-
   ; Clean IO files and load avatar-specific files
   ;``````````````````````````````````````````````````````````
   (clean-io-files)
@@ -184,7 +166,7 @@
     ;`````````````````````````
     (safe-mode
       (handler-case (eta :subsystems-perception *subsystems-perception* :subsystems-specialist *subsystems-specialist*
-                        :emotions *emotion-tags* :dependencies *dependencies* :model-names *model-names* :response-generator *generation-mode*
+                        :emotions *emotion-tags* :model-names *model-names* :response-generator *generation-mode*
                         :gist-interpreter *interpretation-mode* :parser *parser-mode*)
         (error (c)
           (error-message "Execution of Eta failed due to an internal error.")
@@ -193,7 +175,7 @@
     ; Run Eta
     ;`````````````````````````
     (t (eta :subsystems-perception *subsystems-perception* :subsystems-specialist *subsystems-specialist*
-            :emotions *emotion-tags* :dependencies *dependencies* :model-names *model-names* :response-generator *generation-mode*
+            :emotions *emotion-tags* :model-names *model-names* :response-generator *generation-mode*
             :gist-interpreter *interpretation-mode* :parser *parser-mode*)))
 
 ) ; END start
