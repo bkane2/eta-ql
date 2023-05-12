@@ -5,11 +5,11 @@
 
 (in-package :eta)
 
-(defun coref-ulf (ulf)
-;``````````````````````
+(defun coref-ulf (ulf ds)
+;`````````````````````````
 ; The top level coreference function for ulf. Wrapper for process-ulf function.
 ;
-  (first (process-ulf ulf))
+  (first (process-ulf ulf ds))
 ) ; END coref-ulf
 
 
@@ -21,16 +21,16 @@
 ) ; END coref-gist
 
 
-(defun add-entity (entity)
-; ``````````````````````````
+(defun add-entity (entity ds)
+; ````````````````````````````
 ; Adds an entity to the reference list.
 ;
-  (push entity (ds-reference-list *ds*))
+  (push entity (ds-reference-list ds))
 ) ; END add-entity
 
 
-(defun corefer (de1 de2)
-; ````````````````````````
+(defun corefer (de1 de2 ds)
+; ```````````````````````````
 ; Makes entity de1 corefer to entity de2 by adding the references of the new entity to the
 ; references of the existing entity, and making the references of the new-entity point to the
 ; existing entity as a referent, as well as updating recency. If the coreferent provides
@@ -47,38 +47,38 @@
     (setf (get de2 'type) (get de1 'type)))
   (setf (get de2 'mods)
     (remove-duplicates (append (get de1 'mods) (get de2 'mods)) :test #'equal))
-  (setf (ds-reference-list *ds*) (cons de2 (remove de1 (ds-reference-list *ds*))))
+  (setf (ds-reference-list ds) (cons de2 (remove de1 (ds-reference-list ds))))
 ) ; END corefer
 
 
-(defun prune-reference-list (recency)
-; ````````````````````````````````````
+(defun prune-reference-list (recency ds)
+; ````````````````````````````````````````
 ; Prunes the reference list of all discourse entities past a certain recency threshold (keeping a DE
 ; in the case that it doesn't have a recency assigned).
 ;
-  (remove-if (lambda (de) (and (get de 'recency) (< recency (get de 'recency)))) (ds-reference-list *ds*))
+  (remove-if (lambda (de) (and (get de 'recency) (< recency (get de 'recency)))) (ds-reference-list ds))
 ) ; END prune-reference-list
 
 
-(defun update-reference-list ()
-; ``````````````````````````````
+(defun update-reference-list (ds)
+; ```````````````````````````````
 ; Updates the reference list after a sentence by incrementing the recency of all entities which are assigned
 ; a recency.
 ;
-  (setf (ds-reference-list *ds*) (mapcar (lambda (de)
-    (if (and (get de 'recency)) (setf (get de 'recency) (1+ (get de 'recency)))) de) (ds-reference-list *ds*)))
+  (setf (ds-reference-list ds) (mapcar (lambda (de)
+    (if (and (get de 'recency)) (setf (get de 'recency) (1+ (get de 'recency)))) de) (ds-reference-list ds)))
 ) ; END update-reference-list
 
 
-(defun print-entities (&key verbose)
-; ```````````````````````````````````
+(defun print-entities (ds &key verbose)
+; ````````````````````````````````````````
 ; Outputs all entities in reference list.
 ;
   (mapcar
     (lambda (x) (if verbose (format t "entity: ~a~% |- type: ~a~% |- mods: ~a~% |- recency: ~a~% |- salience: ~a~%"
                               x (get x 'type) (get x 'mods) (get x 'recency) (get x 'salience))
                             (format t "- ~a~%" x)) x)
-    (ds-reference-list *ds*))
+    (ds-reference-list ds))
 ) ; END print-entities
 
 
@@ -116,13 +116,13 @@
 ) ; END intra-sentence-candidates
 
 
-(defun inter-sentence-candidates (de-list)
-; ``````````````````````````````````````````
+(defun inter-sentence-candidates (de-list ds)
+; ``````````````````````````````````````````````
 ; Takes a de-list (more precisely a tree of discourse entities), and creates a list of lists where each sub-list consists
 ; of each discourse entity and its possible inter-sentence candidates. Here we maintain a (flat) reference list of previous
 ; discourse entities, and all previous discourse entities (within a particular cutoff) are assigned to all entities in de-list.
 ;
-  (let ((poss-candidate-list (prune-reference-list *recency-cutoff*)))
+  (let ((poss-candidate-list (prune-reference-list *recency-cutoff* ds)))
     (labels ((form-candidates-recur (lst)
       (cond
         ((atom lst) nil)
@@ -135,13 +135,13 @@
 ) ; END inter-sentence-candidates
 
 
-(defun get-candidate-lists (de-list)
-; ````````````````````````````````````
+(defun get-candidate-lists (de-list ds)
+; ``````````````````````````````````````
 ; Creates lists of candidates for each new discourse entity in de-list, consisting of both intra-sentence candidates and
 ; inter-sentence candidates.
 ;
   (mapcar (lambda (intra inter) (list (car intra) (append (cdr intra) (cdr inter))))
-    (intra-sentence-candidates de-list) (inter-sentence-candidates de-list))
+    (intra-sentence-candidates de-list) (inter-sentence-candidates de-list ds))
 ) ; END get-candidate-lists
 
 
@@ -242,8 +242,8 @@
 ) ; END preprocess-ulf
 
 
-(defun process-ulf (ulf)
-; `````````````````````````
+(defun process-ulf (ulf ds)
+; ``````````````````````````
 ; Processes a ulf by obtaining and substituting most likely coreferences. First preprocesses the ulf by
 ; applying macros and other substitutions, and then substitutes discourse entity symbols into the ulf for
 ; all references. Then generates candidate lists for each discourse entity, weights each candidate, gets the
@@ -254,13 +254,13 @@
   ; Preprocess the incoming ulf
   (setq ulf (preprocess-ulf ulf))
   ; Upon recieving new sentence, update recency of previous references
-  (update-reference-list)
+  (update-reference-list ds)
   ; Candidate list for each reference consists of all DEs referenced in the
   ; previous sentence, and the DEs introduced in the new sentence
   (let* ((ulf+de-list (subst-discourse-entities ulf))
          (ulf (first ulf+de-list))
          (de-list (second ulf+de-list))
-         (candidate-lists (get-candidate-lists de-list))
+         (candidate-lists (get-candidate-lists de-list ds))
          results)
 
   ; Do for each pair of discourse entity and candidates for coreference
@@ -288,7 +288,7 @@
           ; in conversation log), excluding the question mark
           (let ((prev-question (first (car (remove nil
                     (mapcar (lambda (ulfs) (if (question-ulf? (car ulfs)) (car ulfs)))
-                      (mapcar #'dialogue-turn-semantics (ds-conversation-log *ds*))))))))
+                      (mapcar #'dialogue-turn-semantics (ds-conversation-log ds))))))))
             (if prev-question
               (cons (car pair) (create-discourse-entity prev-question))
               pair)))
@@ -301,8 +301,8 @@
   ; Corefer each discourse entity to its top candidate (or accomodate that entity if the top candidate is itself)
   (mapcar (lambda (pair)
       (if (equal (car pair) (cdr pair))
-        (add-entity (car pair))
-        (corefer (cdr pair) (car pair))))
+        (add-entity (car pair) ds)
+        (corefer (cdr pair) (car pair) ds)))
     results)
 
   ; Return the resolved ulf as well as the discourse entities that were matched

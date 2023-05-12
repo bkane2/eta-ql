@@ -21,8 +21,8 @@
 (in-package :eta)
 
 
-(defun generate-response (query-ulf relations)
-; `````````````````````````````````````````````
+(defun generate-response (query-ulf relations ds)
+; `````````````````````````````````````````````````
 ; Generates a natural language response, given a query ULF and a list of satisfying relations with
 ; certainties (of form ((that ?rel) certain-to-degree ?cert)).
 ; In the case where relations is nil, we rely on presupposition handling to generate the appropriate response.
@@ -40,7 +40,7 @@
     ; ans-tuple consists of a list (ans-ulf uncertain-flag), where ans-ulf is a ULF corresponding
     ; to the relevant answer, and uncertain-flag indicates whether the answer is above or below the
     ; certainty threshold.
-    (setq ans-tuple (form-ans query-type relations))
+    (setq ans-tuple (form-ans query-type relations ds))
     (setq ans-ulf (first ans-tuple))
     (setq uncertain-flag (second ans-tuple))
 
@@ -150,7 +150,7 @@
 ) ; END get-query-type
 
 
-(defun form-ans (query-type relations)
+(defun form-ans (query-type relations ds)
 ; `````````````````````````````````````````
 ; Get an answer (i.e. a ULF object reflecting the answer) depending on the broad type of query
 ; and the list of relations given.
@@ -172,10 +172,10 @@
         (if ans-set '(YES.YN) '(NO.YN)))
       ; Query is ATTR-COLOR type
       ((equal query-type 'ATTR-COLOR)
-        (form-ans-color ans-set))
+        (form-ans-color ans-set ds))
       ; Query is COLOR-OBJECT type
       ((equal query-type 'COLOR-OBJECT)
-        (form-ans-color-object ans-set))
+        (form-ans-color-object ans-set ds))
       ; Query is COUNT type
       ((equal query-type 'COUNT)
         (form-ans-count ans-set))
@@ -357,23 +357,23 @@
 ) ; END form-ans-count
 
 
-(defun form-ans-color (relations)
-; ````````````````````````````````
+(defun form-ans-color (relations ds)
+; ````````````````````````````````````
 ; Retrieves colors from a list of relations.
 ;
   (make-set (remove-duplicates (remove nil
     (mapcar (lambda (rel)
-      (get-color (first rel))) relations)) :test #'equal))
+      (get-color (first rel) ds)) relations)) :test #'equal))
 ) ; END form-ans-color
 
 
-(defun form-ans-color-object (relations)
-; ````````````````````````````````````````
+(defun form-ans-color-object (relations ds)
+; ``````````````````````````````````````````
 ; Retrieves color noun phrases from a list of relations.
 ;
   (make-set (remove-duplicates (remove nil
     (mapcar (lambda (rel)
-      (make-color-np (first rel))) relations)) :test #'equal))
+      (make-color-np (first rel) ds)) relations)) :test #'equal))
 ) ; END form-ans-color
 
 
@@ -538,22 +538,22 @@
 ) ; END make-plur-np-obj
 
 
-(defun make-color-np (np)
+(defun make-color-np (np ds)
 ; ``````````````````````````
 ; Forms an indefinite noun phrase from a color adjective and type.
 ; e.g. (make-color-np '(the.d (|Twitter| block.n))) => (a.d (red.a block.n))
 ;
-  (let ((color (get-color np)) (type (get-head-noun np)))
+  (let ((color (get-color np ds)) (type (get-head-noun np)))
     `(a.d (,color ,type)))
 ) ; END make-color-np
 
 
-(defun get-color (np)
-; `````````````````````
+(defun get-color (np ds)
+; ````````````````````````
 ; Gets the color of a given name.
 ; e.g. (get-color '(the.d (|Twitter| block.n))) => red.a
 ;
-  (find-if (lambda (pred) (get-from-context (list np pred))) *color-adj-list*)
+  (find-if (lambda (pred) (get-from-context (list np pred) ds)) *color-adj-list*)
 ) ; END get-color
 
 

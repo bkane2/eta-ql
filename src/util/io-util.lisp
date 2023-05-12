@@ -109,11 +109,11 @@
 
 
 
-(defun log-turn-write-all ()
-;`````````````````````````````
+(defun log-turn-write-all (ds)
+;``````````````````````````````
 ; Logs all of the turns in the current conversation log.
 ;
-  (mapcar #'log-turn-write (reverse (ds-conversation-log *ds*)))
+  (mapcar #'log-turn-write (reverse (ds-conversation-log ds)))
 ) ; END log-turn-write-all
 
 

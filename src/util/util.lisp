@@ -1004,12 +1004,12 @@
 
 
 
-(defun find-prev-turn-of-agent (agent)
+(defun find-prev-turn-of-agent (agent ds)
 ;``````````````````````````````````````````````
 ; Finds the most recent turn in the conversation log from the given agent.
 ;
   (car (remove-if (lambda (turn) (not (equal (dialogue-turn-agent turn) agent)))
-    (ds-conversation-log *ds*)))
+    (ds-conversation-log ds)))
 ) ; END find-prev-turn-of-agent
 
 
@@ -1314,8 +1314,8 @@
 
 
 
-(defun print-gist-kb (&key filename)
-;`````````````````````````````````````
+(defun print-gist-kb (ds &key filename)
+;`````````````````````````````````````````
 ; Prints all gist clauses in the gist-kb for a user.
 ; If a file is specified, append to that file.
 ;
@@ -1329,7 +1329,7 @@
                                           :append :if-does-not-exist :create)
           (format outfile "~% ~a   ~a" key val))
         (format t "~% ~a   ~a" key val))))
-  (ds-gist-kb-user *ds*))
+  (ds-gist-kb-user ds))
 ) ; END print-gist-kb
 
 
@@ -1342,7 +1342,7 @@
 
 
 
-(defun print-memory (&key verbose key)
+(defun print-memory (ds &key verbose key)
 ;````````````````````````````````````````
 ; Prints facts in the memory. When verbose is given as true,
 ; print all keys and associated facts as well. If key is given,
@@ -1351,7 +1351,7 @@
   (let (l1 l2)
     (maphash (lambda (k v)
       (if (equal v t) (setq l1 (cons k l1))
-        (setq l2 (cons (list k v) l2)))) (ds-memory *ds*))
+        (setq l2 (cons (list k v) l2)))) (ds-memory ds))
     (mapcar (lambda (f)
       (format t "~a~%" f)) l1)
     (when (or verbose key)
@@ -1363,33 +1363,33 @@
 
 
 
-(defun store-in-memory (wff)
+(defun store-in-memory (wff ds)
 ;```````````````````````````````
 ; Stores a wff in memory.
 ; 
   (let ((wff1 (if (equal (car wff) 'quote) (eval wff) wff)))
-    (store-fact wff (ds-memory *ds*)))
+    (store-fact wff (ds-memory ds)))
 ) ; END store-in-memory
 
 
 
-(defun get-from-memory (pred-patt)
-;````````````````````````````````````
+(defun get-from-memory (pred-patt ds)
+;`````````````````````````````````````
 ; Retrieves a fact from memory.
 ;
-  (get-matching-facts pred-patt (ds-memory *ds*))
+  (get-matching-facts pred-patt (ds-memory ds))
 ) ; END get-from-memory
 
 
 
-(defun get-from-memory-characterizing-episode (pred-patt ep-name)
-;``````````````````````````````````````````````````````````````````
+(defun get-from-memory-characterizing-episode (pred-patt ep-name ds)
+;`````````````````````````````````````````````````````````````````````
 ; Given an episode name, find all facts in memory characterizing (or partially characterizing)
 ; that episode, and return the ones matching pred-patt.
 ; 
   (let (facts matches)
     (setq facts (mapcar #'first
-      (append (get-from-memory `(?p ** ,ep-name)) (get-from-memory `(?p * ,ep-name)))))
+      (append (get-from-memory `(?p ** ,ep-name) ds) (get-from-memory `(?p * ,ep-name) ds))))
     (dolist (fact facts)
       (when (fact-matches-p pred-patt fact)
         (setq matches (cons fact matches))))
@@ -1398,7 +1398,7 @@
 
 
 
-(defun get-episode-from-contextual-fact (pred-patt)
+(defun get-episode-from-contextual-fact (pred-patt ds)
 ;```````````````````````````````````````````````````````````````````
 ; Given a fact, find the episode-name that that fact characterizes (or
 ; partially characterizes). The fact must be currently true in context
@@ -1406,10 +1406,10 @@
 ;
   (let (ep-names)
     (setq ep-names (mapcar #'third
-      (append (get-from-memory `(,pred-patt ** ?e)) (get-from-memory `(,pred-patt * ?e)))))
+      (append (get-from-memory `(,pred-patt ** ?e) ds) (get-from-memory `(,pred-patt * ?e) ds))))
     ; Remove any episodes that aren't currently true in context
     (setq ep-names
-      (remove-if-not (lambda (ep-name) (get-from-memory `(NOW* during ,ep-name))) ep-names))
+      (remove-if-not (lambda (ep-name) (get-from-memory `(NOW* during ,ep-name) ds)) ep-names))
     ; If there are multiple episodes, return the first one in the list
     ; TODO: this should be modified to return the most temporally recent episode (using timegraph
     ; or direct episode relations in memory) eventually.
@@ -1418,16 +1418,16 @@
 
 
 
-(defun get-utterances-characterizing-episode (ep-name)
+(defun get-utterances-characterizing-episode (ep-name ds)
 ;``````````````````````````````````````````````````````````````````
 ; Given an episode name, find all surface utterances characterizing it.
 ;
-  (unwrap-utterances (get-from-memory-characterizing-episode 'say-to.v ep-name))
+  (unwrap-utterances (get-from-memory-characterizing-episode 'say-to.v ep-name ds))
 ) ; END get-utterances-characterizing-episode
 
 
 
-(defun get-gist-clauses-characterizing-episode (ep-name)
+(defun get-gist-clauses-characterizing-episode (ep-name ds)
 ;``````````````````````````````````````````````````````````````````
 ; Given an episode name, find all gist-clauses characterizing it.
 ; NOTE: split any gist-clauses with [SEP] delimiters into multiple gist-clauses;
@@ -1435,35 +1435,35 @@
 ; before storage and split later.
 ;
   (apply #'append (mapcar (lambda (clause) (list-split clause '[SEP])) 
-    (unwrap-gist-clauses (get-from-memory-characterizing-episode 'paraphrase-to.v ep-name))))
+    (unwrap-gist-clauses (get-from-memory-characterizing-episode 'paraphrase-to.v ep-name ds))))
 ) ; END get-gist-clauses-characterizing-episode
 
 
 
-(defun get-semantic-interpretations-characterizing-episode (ep-name)
-;``````````````````````````````````````````````````````````````````
+(defun get-semantic-interpretations-characterizing-episode (ep-name ds)
+;```````````````````````````````````````````````````````````````````````
 ; Given an episode name, find all semantic interpretations characterizing it.
 ;
-  (unwrap-semantic-interpretations (get-from-memory-characterizing-episode 'articulate2-to.v ep-name))
+  (unwrap-semantic-interpretations (get-from-memory-characterizing-episode 'articulate2-to.v ep-name ds))
 ) ; END get-semantic-interpretations-characterizing-episode
 
 
 
-(defun store-gist-clause-characterizing-episode (gist-clause ep-name subj obj)
-;```````````````````````````````````````````````````````````````````````````````
+(defun store-gist-clause-characterizing-episode (gist-clause ep-name subj obj ds)
+;````````````````````````````````````````````````````````````````````````````````
 ; Given a gist-clause and episode name, store a paraphrase-to.v fact with given
 ; subject and object (e.g. ^me and ^you) partially characterizing the episode.
 ; Store the wff in context as well.
 ;
   (when (null gist-clause) (return-from store-gist-clause-characterizing-episode nil))
   (let ((wff `(,subj paraphrase-to.v ,obj ',gist-clause)))
-    (store-in-memory `(,wff * ,ep-name))
-    (store-in-context wff)
+    (store-in-memory `(,wff * ,ep-name) ds)
+    (store-in-context wff ds)
 )) ; END store-gist-clause-characterizing-episode
 
 
 
-(defun store-semantic-interpretation-characterizing-episode (wff ep-name subj obj)
+(defun store-semantic-interpretation-characterizing-episode (wff ep-name subj obj ds)
 ;```````````````````````````````````````````````````````````````````````````````````
 ; Given a wff and episode name, store an articulate2-to.v fact with given
 ; subject and object (e.g. ^me and ^you) partially characterizing the episode.
@@ -1471,35 +1471,35 @@
 ;
   (when (null wff) (return-from store-semantic-interpretation-characterizing-episode nil))
   (let ((wff `(,subj articulate2-to.v ,obj ',wff)))
-    (store-in-memory `(,wff * ,ep-name))
-    (store-in-context wff)
+    (store-in-memory `(,wff * ,ep-name) ds)
+    (store-in-context wff ds)
 )) ; END store-semantic-interpretation-characterizing-episode
 
 
 
-(defun remove-from-memory (pred-patt)
+(defun remove-from-memory (pred-patt ds)
 ;```````````````````````````````````````
 ; Removes a fact from memory.
 ;
-  (let ((facts (get-from-memory pred-patt)))
+  (let ((facts (get-from-memory pred-patt ds)))
     (if (and facts (not (listp facts)))
-      (remove-fact pred-patt (ds-memory *ds*))
-      (remove-facts facts (ds-memory *ds*))))
+      (remove-fact pred-patt (ds-memory ds))
+      (remove-facts facts (ds-memory ds))))
 ) ; END remove-from-memory
 
 
 
-(defun find-all-instances-memory (descr)
+(defun find-all-instances-memory (descr ds)
 ;```````````````````````````````````````````
 ; Given a lambda description, find all instances
 ; from memory (see 'find-all-instances').
 ;
-  (find-all-instances descr (ds-memory *ds*))
+  (find-all-instances descr (ds-memory ds))
 ) ; END find-all-instances-memory
 
 
 
-(defun store-init-time-of-episode (ep-name &key time-record)
+(defun store-init-time-of-episode (ep-name ds &key time-record)
 ;``````````````````````````````````````````````````````````````
 ; Stores the initialization time of episode (assumed to be current time,
 ; unless a time record structure is given as time-record) in both memory
@@ -1507,26 +1507,26 @@
 ;
   (if (null time-record) (setq time-record (get-time)))
   ; Store temporal propositions related to episode in memory
-  (store-in-memory `(NOW* during ,ep-name))
-  (store-in-memory `(,time-record during ,ep-name))
+  (store-in-memory `(NOW* during ,ep-name) ds)
+  (store-in-memory `(,time-record during ,ep-name) ds)
   ; Store episode in timegraph, with lower bound
-  (add-episode-to-timegraph ep-name)
-  (update-lower-bound-timegraph ep-name time-record)
+  (add-episode-to-timegraph ep-name ds)
+  (update-lower-bound-timegraph ep-name time-record ds)
 ) ; END store-init-time-of-episode
 
 
 
-(defun store-end-time-of-episode (ep-name &key time-record)
+(defun store-end-time-of-episode (ep-name ds &key time-record)
 ;``````````````````````````````````````````````````````````````
 ; Stores the end time of episode (assumed to be current time, unless a time
 ; record structure is given as time-record) in both memory and the timegraph structure.
 ;
   (if (null time-record) (setq time-record (get-time)))
   ; Update temporal propositions related to episode in memory
-  (remove-from-memory `(NOW* during ,ep-name))
-  (store-in-memory `(,time-record during ,ep-name))
+  (remove-from-memory `(NOW* during ,ep-name) ds)
+  (store-in-memory `(,time-record during ,ep-name) ds)
   ; Add upper bound to episode in timegraph
-  (update-upper-bound-timegraph ep-name time-record)
+  (update-upper-bound-timegraph ep-name time-record ds)
 ) ; END store-end-time-of-episode
 
 
@@ -1539,8 +1539,8 @@
 
 
 
-(defun print-context (&key verbose key)
-;```````````````````````````````````````
+(defun print-context (ds &key verbose key)
+;``````````````````````````````````````````
 ; Prints facts in the context. When verbose is given as true,
 ; print all keys and associated facts as well. If key is given,
 ; print only the list of facts stored under that key.
@@ -1548,7 +1548,7 @@
   (let (l1 l2)
     (maphash (lambda (k v)
       (if (equal v t) (setq l1 (cons k l1))
-        (setq l2 (cons (list k v) l2)))) (ds-context *ds*))
+        (setq l2 (cons (list k v) l2)))) (ds-context ds))
     (mapcar (lambda (f)
       (format t "~a~%" f)) l1)
     (when (or verbose key)
@@ -1560,50 +1560,50 @@
 
 
 
-(defun store-in-context (wff)
-;```````````````````````````````
+(defun store-in-context (wff ds)
+;````````````````````````````````
 ; Stores a wff in context.
 ; 
   (let ((wff1 (if (equal (car wff) 'quote) (eval wff) wff)))
-    (store-fact wff (ds-context *ds*)))
+    (store-fact wff (ds-context ds)))
 ) ; END store-in-context
 
 
 
-(defun get-from-context (pred-patt)
-;````````````````````````````````````
+(defun get-from-context (pred-patt ds)
+;``````````````````````````````````````
 ; Retrieves a fact from context, by checking whether something matching
 ; pred-patt is in the context hash table (i.e., the table containing
 ; facts true at NOW*).
 ;
-  (get-matching-facts pred-patt (ds-context *ds*))
+  (get-matching-facts pred-patt (ds-context ds))
 ) ; END get-from-context
 
 
 
-(defun remove-from-context (pred-patt)
-;```````````````````````````````````````
+(defun remove-from-context (pred-patt ds)
+;`````````````````````````````````````````
 ; Removes a fact from context.
 ;
-  (let ((facts (get-from-context pred-patt)))
+  (let ((facts (get-from-context pred-patt ds)))
     (if (and facts (not (listp facts)))
-      (remove-fact pred-patt (ds-context *ds*))
-      (remove-facts facts (ds-context *ds*))))
+      (remove-fact pred-patt (ds-context ds))
+      (remove-facts facts (ds-context ds))))
 ) ; END remove-from-context
 
 
 
-(defun find-all-instances-context (descr)
+(defun find-all-instances-context (descr ds)
 ;```````````````````````````````````````````
 ; Given a lambda description, find all instances
 ; from context (see 'find-all-instances').
 ;
-  (find-all-instances descr (ds-context *ds*))
+  (find-all-instances descr (ds-context ds))
 ) ; END find-all-instances-context
 
 
 
-(defun store-contextual-fact-characterizing-episode (wff ep-name &key partial)
+(defun store-contextual-fact-characterizing-episode (wff ep-name ds &key partial)
 ;`````````````````````````````````````````````````````````````````````````````````
 ; Stores a contextual fact characterizing episode ep-name. e.g., if
 ; wff = (^you reply-to.v E1) and ep-name = E2, store <wff> in context
@@ -1611,16 +1611,16 @@
 ;
   (let ((wff1 (if (equal (car wff) 'quote) (eval wff) wff)))
     (if partial
-      (store-in-memory `(,wff1 * ,ep-name))
-      (store-in-memory `(,wff1 ** ,ep-name)))
-    (store-in-context wff1)
+      (store-in-memory `(,wff1 * ,ep-name) ds)
+      (store-in-memory `(,wff1 ** ,ep-name) ds))
+    (store-in-context wff1 ds)
     ep-name
 )) ; END store-contextual-fact-characterizing-episode
 
 
 
-(defun store-new-contextual-facts (wffs)
-;`````````````````````````````````````````
+(defun store-new-contextual-facts (wffs ds)
+;````````````````````````````````````````````
 ; An episode name, say, E1 is generated for the list of fact(s) given as input.
 ; For each wff, we store the following fact in memory:
 ;
@@ -1642,19 +1642,19 @@
 ; Returns the episode name that was created.
 ;
   (let ((ep-name (episode-name)))
-    (store-init-time-of-episode ep-name)
+    (store-init-time-of-episode ep-name ds)
     ; Store each fact in memory and context
     (cond
       ((= 1 (length wffs))
-        (store-contextual-fact-characterizing-episode (car wffs) ep-name))
-      (t (mapcar (lambda (wff) (store-contextual-fact-characterizing-episode wff ep-name :partial t)) wffs)))
+        (store-contextual-fact-characterizing-episode (car wffs) ep-name ds))
+      (t (mapcar (lambda (wff) (store-contextual-fact-characterizing-episode wff ep-name ds :partial t)) wffs)))
     ep-name
 )) ; END store-new-contextual-facts
 
 
 
-(defun remove-old-contextual-fact (pred-patt)
-;``````````````````````````````````````````````
+(defun remove-old-contextual-fact (pred-patt ds)
+;````````````````````````````````````````````````
 ; Removes a fact (or any number of matching facts) from context when that
 ; fact is found to be no longer true. To do this, we retrieve the episode
 ; name characterized by the wff (generally, a list of episode names), say,
@@ -1665,7 +1665,7 @@
 ;
 ; TODO: should we add (<timestamp> during E1), or (<timestamp> ends E1)?
 ;
-  (let ((facts (get-from-context pred-patt))
+  (let ((facts (get-from-context pred-patt ds))
         ep-wffs-* ep-wffs-** ep-names-* ep-names-**
         all-wffs-* time-record)
     (if (and facts (not (listp facts)))
@@ -1674,34 +1674,34 @@
     (dolist (fact facts)
       (setq time-record (get-time))
       ; Get all formulas with fact and ** operator, and extract ep-names
-      (setq ep-wffs-** (get-from-memory `(,fact ** ?e)))
-      (setq ep-wffs-* (get-from-memory `(,fact * ?e)))
+      (setq ep-wffs-** (get-from-memory `(,fact ** ?e) ds))
+      (setq ep-wffs-* (get-from-memory `(,fact * ?e) ds))
       (setq ep-names-** (apply #'append (mapcar #'last ep-wffs-**)))
       (setq ep-names-* (apply #'append (mapcar #'last ep-wffs-*)))
       ; For each ep-name characterized by fact, remove (NOW* during ep-name) fact
       ; from memory and add ending timestamp
       (dolist (ep-name ep-names-**)
-        (store-end-time-of-episode ep-name :time-record time-record))
+        (store-end-time-of-episode ep-name ds :time-record time-record))
       ; For each ep-name partially characterized by fact, if there are no other facts
       ; partially characterizing ep-name, remove (NOW* during ep-name) from memory
       (dolist (ep-name ep-names-*)
-        (setq all-wffs-* (get-from-memory `(?fact * ,ep-name)))
+        (setq all-wffs-* (get-from-memory `(?fact * ,ep-name) ds))
         (if (and (= 1 (length all-wffs-*)) (equal fact (first (car all-wffs-*))))
-          (store-end-time-of-episode ep-name :time-record time-record)))
+          (store-end-time-of-episode ep-name ds :time-record time-record)))
       ; Remove fact from context
-      (remove-from-context fact)))
+      (remove-from-context fact ds)))
 ) ; END remove-old-contextual-fact
 
 
 
-(defun flush-context ()
+(defun flush-context (ds)
 ;````````````````````````````````
 ; Flushes context of telic verbs (e.g. saying events) which are only
 ; "instantaneously" true and are assumed to become false after a predetermined
 ; amount of time.
 ; These telic verbs are currently recorded manually in 'resources/verbs-telic.lisp'.
 ; 
-  (mapcar #'remove-old-contextual-fact *verbs-telic*)
+  (mapcar (lambda (verb) (remove-old-contextual-fact verb ds)) *verbs-telic*)
 ) ; END flush-context
 
 
@@ -1714,7 +1714,7 @@
 
 
 
-(defun print-kb (&key verbose key)
+(defun print-kb (ds &key verbose key)
 ;```````````````````````````````````````
 ; Prints facts in the knowledge base. When verbose is given as true,
 ; print all keys and associated facts as well. If key is given,
@@ -1723,7 +1723,7 @@
   (let (l1 l2)
     (maphash (lambda (k v)
       (if (equal v t) (setq l1 (cons k l1))
-        (setq l2 (cons (list k v) l2)))) (ds-kb *ds*))
+        (setq l2 (cons (list k v) l2)))) (ds-kb ds))
     (mapcar (lambda (f)
       (format t "~a~%" f)) l1)
     (when (or verbose key)
@@ -1735,46 +1735,46 @@
 
 
 
-(defun store-in-kb (wff)
+(defun store-in-kb (wff ds)
 ;```````````````````````````````
 ; Stores a wff in knowledge base.
 ; 
   (let ((wff1 (if (equal (car wff) 'quote) (eval wff) wff)))
-    (store-fact wff (ds-kb *ds*)))
+    (store-fact wff (ds-kb ds)))
 ) ; END store-in-kb
 
 
 
-(defun get-from-kb (pred-patt)
+(defun get-from-kb (pred-patt ds)
 ;````````````````````````````````````
 ; Retrieves a fact from knowledge base, by checking whether something matching
 ; pred-patt is in the kb hash table.
 ;
-  (get-matching-facts pred-patt (ds-kb *ds*))
+  (get-matching-facts pred-patt (ds-kb ds))
 ) ; END get-from-kb
 
 
 
-(defun get-all-from-kb ()
+(defun get-all-from-kb (ds)
 ;```````````````````````````
 ; Retrieves all facts from knowledge base.
 ;
   (let (ret)
     (maphash (lambda (k v)
-      (if (equal v t) (setq ret (cons k ret)))) (ds-kb *ds*))
+      (if (equal v t) (setq ret (cons k ret)))) (ds-kb ds))
     ret
 )) ; END get-all-from-kb
 
 
 
-(defun remove-from-kb (pred-patt)
+(defun remove-from-kb (pred-patt ds)
 ;```````````````````````````````````````
 ; Removes a fact from knowledge base.
 ;
-  (let ((facts (get-from-kb pred-patt)))
+  (let ((facts (get-from-kb pred-patt ds)))
     (if (and facts (not (listp facts)))
-      (remove-fact pred-patt (ds-kb *ds*))
-      (remove-facts facts (ds-kb *ds*))))
+      (remove-fact pred-patt (ds-kb ds))
+      (remove-facts facts (ds-kb ds))))
 ) ; END remove-from-kb
 
 
@@ -1949,21 +1949,21 @@
 (defparameter *concept-sets* nil)
 
 
-(defun get-record-structure (canonical-name)
-;``````````````````````````````````````````````
+(defun get-record-structure (canonical-name ds)
+;```````````````````````````````````````````````
 ; Gets the record structure aliased to a canonical name,
 ; if one exists.
 ;
-  (find-if #'record-structure? (get-aliases canonical-name))
+  (find-if #'record-structure? (get-aliases canonical-name ds))
 ) ; END get-record-structure
 
 
 
-(defun record-structure! (canonical-name)
-;``````````````````````````````````````````
+(defun record-structure! (canonical-name ds)
+;````````````````````````````````````````````
 ; TTT predicate for substituting record structure for name.
 ;
-  (get-record-structure canonical-name)
+  (get-record-structure canonical-name ds)
 ) ; END record-structure!
 
 
@@ -1977,7 +1977,7 @@
 
 
 
-(defun add-alias (alias canonical-name)
+(defun add-alias (alias canonical-name ds)
 ;````````````````````````````````````````
 ; Adds a given alias for a canonical name to the equality sets hash table,
 ; i.e., indexing on the canonical name.
@@ -1985,51 +1985,51 @@
 ; set (|BW-concept-3| (k BW-arch.n)) hashed on |BW-concept-3|, or else appends
 ; (k BW-arch.n) to the existing set under that index.
 ;
-  (if (member alias (gethash canonical-name (ds-equality-sets *ds*)) :test #'equal)
+  (if (member alias (gethash canonical-name (ds-equality-sets ds)) :test #'equal)
     (return-from add-alias nil))
-  (when (not (gethash canonical-name (ds-equality-sets *ds*)))
-    (push canonical-name (gethash canonical-name (ds-equality-sets *ds*))))
-  (push alias (gethash canonical-name (ds-equality-sets *ds*)))
+  (when (not (gethash canonical-name (ds-equality-sets ds)))
+    (push canonical-name (gethash canonical-name (ds-equality-sets ds))))
+  (push alias (gethash canonical-name (ds-equality-sets ds)))
 ) ; END add-alias
 
 
 
-(defun get-aliases (canonical-name)
-;````````````````````````````````````
+(defun get-aliases (canonical-name ds)
+;`````````````````````````````````````
 ; Gets a list of aliases for a particular canonical name.
 ;
-  (gethash canonical-name (ds-equality-sets *ds*))
+  (gethash canonical-name (ds-equality-sets ds))
 ) ; END get-aliases
 
 
 
-(defun remove-alias (alias canonical-name)
-;```````````````````````````````````````````
+(defun remove-alias (alias canonical-name ds)
+;`````````````````````````````````````````````
 ; Removes a given alias for a canonical name.
 ;
-  (when (gethash canonical-name (ds-equality-sets *ds*))
-    (setf (gethash canonical-name (ds-equality-sets *ds*)) 
-      (remove alias (gethash canonical-name (ds-equality-sets *ds*)) :test #'equal)))
+  (when (gethash canonical-name (ds-equality-sets ds))
+    (setf (gethash canonical-name (ds-equality-sets ds)) 
+      (remove alias (gethash canonical-name (ds-equality-sets ds)) :test #'equal)))
 ) ; END remove-alias
 
 
 
-(defun print-aliases ()
+(defun print-aliases (ds)
 ;````````````````````````
 ; Prints all aliases in equality sets hash table.
 ;
   (maphash (lambda (canonical-name aliases)
       (format t "~a: ~a~%" canonical-name aliases))
-    (ds-equality-sets *ds*))
+    (ds-equality-sets ds))
 ) ; END print-aliases
 
 
 
-(defun get-generic-name (canonical-name)
-;``````````````````````````````````````````
+(defun get-generic-name (canonical-name ds)
+;```````````````````````````````````````````
 ; Gets the generic name (i.e. a reified noun, such as (k BW-arch.n)).
 ;
-  (find-if #'kind? (get-aliases canonical-name))
+  (find-if #'kind? (get-aliases canonical-name ds))
 ) ; END get-generic-name
 
 
@@ -2068,11 +2068,11 @@
 
 
 
-(defun concept-noun-phrase! (x)
-; ````````````````````````````````
+(defun concept-noun-phrase! (x ds)
+; `````````````````````````````````
 ; Maps a concept name to an English noun phrase.
 ;
-  (let ((np (generic-name-to-np (get-generic-name x))))
+  (let ((np (generic-name-to-np (get-generic-name x ds))))
     (when (null np)
       (return-from concept-noun-phrase! '(an unnamed concept)))
     np)
@@ -2080,11 +2080,11 @@
 
 
 
-(defun concept-noun! (x)
-; ``````````````````````````
+(defun concept-noun! (x ds)
+; ```````````````````````````
 ; Maps a concept name to an English noun.
 ;
-  (let ((name (get-generic-name x)))
+  (let ((name (get-generic-name x ds)))
     (when (null name)
       (return-from concept-noun! '(unnamed concept)))
     (cdr (generic-name-to-np name)))
@@ -2101,8 +2101,8 @@
 
 
 
-(defun store-aliases-of-concept (concept-predicate canonical-name obj-type)
-;```````````````````````````````````````````````````````````````````````````
+(defun store-aliases-of-concept (concept-predicate canonical-name obj-type ds)
+;`````````````````````````````````````````````````````````````````````````````
 ; Stores an object schema (record structure) as an alias of an associated
 ; canonical name (e.g., |BW-Stack|), as well as a generic name (e.g., (k BW-arch.n)).
 ; Also store the type of the canonical name (e.g., BW-concept-primitive.n) in context.
@@ -2110,9 +2110,9 @@
   (let (generic-name schema-record)
     (setq schema-record (cons '$ (obj-schema-contents (get-stored-schema concept-predicate))))
     (setq generic-name (list 'k concept-predicate))
-    (add-alias generic-name canonical-name)
-    (add-alias schema-record canonical-name)
-    (store-in-context (list canonical-name obj-type))
+    (add-alias generic-name canonical-name ds)
+    (add-alias schema-record canonical-name ds)
+    (store-in-context (list canonical-name obj-type) ds)
 )) ; END store-aliases-of-concept
 
 
@@ -2126,8 +2126,8 @@
 
 
 
-(defun store-concept-set (set-type canonical-name concept-set)
-;```````````````````````````````````````````````````````````````
+(defun store-concept-set (set-type canonical-name concept-set ds)
+;````````````````````````````````````````````````````````````````
 ; Stores a concept set (i.e., set of object schema names) with an associated
 ; canonical name. Also stores the generic name, i.e. a set of the generic
 ; names of the objects in the set.
@@ -2135,13 +2135,13 @@
   (let (generic-name)
     (setq generic-name (make-set (mapcar (lambda (concept)
         (find-if (lambda (alias)
-          (equal (car alias) 'k)) (get-aliases concept)))
+          (equal (car alias) 'k)) (get-aliases concept ds)))
       concept-set)))
-    (add-alias generic-name canonical-name)
-    (store-in-context (list canonical-name set-type))
+    (add-alias generic-name canonical-name ds)
+    (store-in-context (list canonical-name set-type) ds)
     (mapcar (lambda (concept)
         (store-in-context
-          (list concept 'member-of.p canonical-name)))
+          (list concept 'member-of.p canonical-name) ds))
       concept-set))
 ) ; END store-concept-set
 

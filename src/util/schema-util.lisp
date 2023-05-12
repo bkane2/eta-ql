@@ -505,8 +505,8 @@
 
 
 
-(defun instantiate-dial-schema (schema args)
-;```````````````````````````````````````````
+(defun instantiate-dial-schema (schema args ds)
+;````````````````````````````````````````````````
 ; Instantiates a general dial-schema given a list of arguments corresponding to the
 ; variables in the schema header. This creates a copy of the general schema with
 ; specific variable bindings. It also adds certain inferences to the dialogue context,
@@ -521,16 +521,16 @@
   (let ((schema-instance (deepcopy-dial-schema schema)))
     (bind-schema-args args schema-instance)
 
-    (instantiate-dial-schema-types schema)
-    (instantiate-dial-schema-rigid-conds schema)
+    (instantiate-dial-schema-types schema ds)
+    (instantiate-dial-schema-rigid-conds schema ds)
 
     schema-instance
 )) ; END instantiate-dial-schema
 
 
 
-(defun instantiate-dial-schema-types (schema)
-;`````````````````````````````````````````````
+(defun instantiate-dial-schema-types (schema ds)
+;````````````````````````````````````````````````
 ; Adds the instantiated types within a schema to context.
 ; If the subject of a type predication is a variable, we create a skolem constant for that
 ; individual, as well as 'observing' context to find a suitable object to identify with that
@@ -552,12 +552,12 @@
         (bind-variable-in-schema schema var sk-name)
         (setq wff (subst sk-name var wff)))
       ; Store type as fact in context.
-      (store-in-context wff))
+      (store-in-context wff ds))
 )) ; END instantiate-dial-schema-types
 
 
 
-(defun instantiate-dial-schema-rigid-conds (schema)
+(defun instantiate-dial-schema-rigid-conds (schema ds)
 ;``````````````````````````````````````````````````````
 ; Adds the instantiated rigid-conds within a schema to context.
 ; USES DS
@@ -566,7 +566,7 @@
     (dolist (pair (group-facts-in-schema-section (get-schema-section schema :rigid-conds)))
       (setq name (first pair))
       (setq wff (second pair))
-      (store-in-context wff))
+      (store-in-context wff ds))
 )) ; END instantiate-dial-schema-rigid-conds
 
 

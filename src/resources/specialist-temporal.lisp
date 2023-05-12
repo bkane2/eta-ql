@@ -91,20 +91,20 @@
 ) ; END freq-np-to-adj
 
 
-(defun update-time ()
-; ``````````````````````
+(defun update-time (ds)
+; ```````````````````````
 ; Updates time to a "new period", i.e. creates a new constant denoting
 ; a new time period (and stores before/after relationships in context)
 ;
-  (let ((time-old (ds-time *ds*)) time-new pred-before pred-after)
+  (let ((time-old (ds-time ds)) time-new pred-before pred-after)
     (setq time-new (intern (format nil "NOW~a"
-      (1+ (chars-to-int (cdddr (explode (ds-time *ds*))))))))
-    (setf (ds-time *ds*) time-new)
-    (store-time)
+      (1+ (chars-to-int (cdddr (explode (ds-time ds))))))))
+    (setf (ds-time ds) time-new)
+    (store-time ds)
     (setq pred-before (list time-old 'before.p time-new))
     (setq pred-after  (list time-new 'after.p time-old))
-    (store-in-context pred-before)
-    (store-in-context pred-after))
+    (store-in-context pred-before ds)
+    (store-in-context pred-after ds))
 ) ; END update-time
 
 
@@ -127,12 +127,12 @@
 ) ; END to-universal-time
 
 
-(defun store-time ()
-; ````````````````````
+(defun store-time (ds)
+; ``````````````````````
 ; Gets and stores the date-time of the current time proposition.
 ;
-  (let ((pred-time (list (ds-time *ds*) 'at-about.p (get-time))))
-    (store-in-context pred-time))
+  (let ((pred-time (list (ds-time ds) 'at-about.p (get-time))))
+    (store-in-context pred-time ds))
 ) ; END store-time
 
 
@@ -156,7 +156,7 @@
 ; ``````````````````````````````````
 ; Gets the time record corresponding to an episode symbol.
 ;
-  (car (find-all-instances-context `(:l (?x) (,ep-sym at-about.p ?x))))
+  (car (find-all-instances-context `(:l (?x) (,ep-sym at-about.p ?x)) *temp-ds*))
 ) ; END get-time-of-episode
 
 
@@ -183,7 +183,7 @@
 ; `````````````````````````
 ; Get a constant denoting the subsequent period (related by before.p/after.p propositions in context).
 ;
-  (car (find-all-instances-context `(:l (?x) (,Ti before.p ?x))))
+  (car (find-all-instances-context `(:l (?x) (,Ti before.p ?x)) *temp-ds*))
 ) ; END get-next-time
 
 
@@ -191,12 +191,12 @@
 ; `````````````````````````
 ; Get a constant denoting the previous period (related by before.p/after.p propositions in context).
 ;
-  (car (find-all-instances-context `(:l (?x) (,Ti after.p ?x))))
+  (car (find-all-instances-context `(:l (?x) (,Ti after.p ?x)) *temp-ds*))
 ) ; END get-prev-time
 
 
-(defun all-times (&optional type)
-; `````````````````````````````````
+(defun all-times (curr-time &optional type)
+; ````````````````````````````````````````````
 ; Gets a list of all times (excluding the current time, unless the current time is 'NOW0).
 ; NOTE: if type is given, restrict to turns of only that type.
 ;
@@ -207,12 +207,12 @@
           ((null time) nil)
           ; If time contains a proposition of the given type, add time to list
           ((if type-pred (remove-if-not type-pred
-                          (mapcar #'first (get-from-context `(nil @ ,time))))
+                          (mapcar #'first (get-from-context `(nil @ ,time) *temp-ds*)))
                          t)
             (cons time (all-times-recur (get-prev-time time))))
           ; Otherwise, skip this time and continue recursively
           (t (all-times-recur (get-prev-time time))))))
-      (all-times-recur (get-prev-time (ds-time *ds*)))))
+      (all-times-recur (get-prev-time curr-time))))
 ) ; END all-times
 
 
@@ -326,7 +326,7 @@
           ; Otherwise, take a hop in the past direction
           (t
             (setq m (- m (if (or (not type-pred) (remove-if-not type-pred
-                              (mapcar #'first (get-from-context `(nil @ ,time-prev)))))
+                              (mapcar #'first (get-from-context `(nil @ ,time-prev) *temp-ds*))))
                             1 0)))
             (if (<= m 0) (equal time1 time-prev)
               (is-apart-type-prev (get-prev-time time-prev) m)))))
@@ -340,7 +340,7 @@
           ; Otherwise, take a hop in the future direction
           (t 
             (setq m (- m (if (or (not type-pred) (remove-if-not type-pred
-                              (mapcar #'first (get-from-context `(nil @ ,time-next)))))
+                              (mapcar #'first (get-from-context `(nil @ ,time-next) *temp-ds*))))
                             1 0)))
               (if (<= m 0) (equal time1 time-next)
                 (is-apart-type-next (get-next-time time-next) m))))))
@@ -448,8 +448,8 @@
 ) ; END limit-props-by-freq
 
 
-(defun eval-temporal-noun (noun)
-; ```````````````````````````````
+(defun eval-temporal-noun (noun curr-time)
+; ```````````````````````````````````````````
 ; Evaluates a noun to a list of times it can denote.
 ; TODO: need to figure out what to do with the temporal-unit-noun? case.
 ; If someone asks something like "within the last five minutes", "minutes"
@@ -458,21 +458,21 @@
 ;
   (cond
     ((temporal-now-noun? noun)
-      (list (get-prev-time (ds-time *ds*))))
+      (list (get-prev-time curr-time)))
     ((temporal-start-noun? noun)
       (list 'NOW0))
     ((temporal-move-noun? noun)
-      (all-times 'move))
+      (all-times curr-time 'move))
     ((temporal-question-noun? noun)
-      (all-times 'question))
+      (all-times curr-time 'question))
     ((temporal-unit-noun? noun)
-      (all-times))
-    (t (all-times)))
+      (all-times curr-time))
+    (t (all-times curr-time)))
 ) ; END eval-temporal-noun
 
 
-(defun eval-temporal-relation (rel time1 time2 &optional mod-a)
-; ```````````````````````````````````````````````````````````````````
+(defun eval-temporal-relation (rel time1 time2 curr-time &optional mod-a)
+; `````````````````````````````````````````````````````````````````````````
 ; Returns a boolean value for the relation rel between time1 and time2.
 ; time2 is a symbol representing a time individual, e.g. NOW0, or a
 ; set of times, e.g. (set-of NOW0 NOW1). time1 is a time individual.
@@ -484,13 +484,13 @@
     (cond
       ((or (null time1) (null time2)) nil)
       ((and (symbolp prep) (fboundp prep))
-        (funcall prep time1 time2 mod-a))
+        (funcall prep time1 time2 curr-time mod-a))
       (t t)))
 ) ; END eval-temporal-relation
 
 
-(defun during.p (time1 time2 mod-a)
-; ```````````````````````````````````
+(defun during.p (time1 time2 curr-time mod-a)
+; `````````````````````````````````````````````
 ; Evaluates if time1 is during time2. If time2 is an atom, simply check if
 ; they're the same time, otherwise time1 is an element of the times in time2.
 ;
@@ -498,8 +498,8 @@
 ) ; END during.p
 
 
-(defun before.p (time1 time2 mod-a)
-; ``````````````````````````````````
+(defun before.p (time1 time2 curr-time mod-a)
+; `````````````````````````````````````````````
 ; Check if time1 is before time2, applying any mod-a as appropriate.
 ;
   (if (listp time2) (before.p time1 (earliest-time (cdr time2)) mod-a)
@@ -531,8 +531,8 @@
 ) ; END before.p
 
 
-(defun after.p (time1 time2 mod-a)
-; ``````````````````````````````````
+(defun after.p (time1 time2 curr-time mod-a)
+; `````````````````````````````````````````````
 ; Check if time1 is after time2, applying any mod-a as appropriate.
 ;
   (if (listp time2) (after.p time1 (latest-time (cdr time2)) mod-a)
@@ -564,8 +564,8 @@
 ) ; END after.p
 
 
-(defun eval-temporal-modifier (adj times &optional mod-a)
-; `````````````````````````````````````````````````````````
+(defun eval-temporal-modifier (adj times curr-time &optional mod-a)
+; ````````````````````````````````````````````````````````````````````
 ; Applies an adjectival modifier to times to retrieve a subset of times.
 ; If mod-a is given, this is passed to the predicate.
 ; NOTE: if relation is not found, return times by default.
@@ -575,12 +575,12 @@
     (cond
       ((or (null times) (not (listp times))) nil)
       ((and (symbolp mod) (fboundp mod))
-        (funcall mod times mod-a))
+        (funcall mod times curr-time mod-a))
       (t times)))
 ) ; END eval-temporal-modifier
 
 
-(defun original.a (times mod-a)
+(defun original.a (times curr-time mod-a)
 ; ```````````````````````````
 ; Select the original time(s) in times, applying any mod-a as appropriate.
 ; Synonyms: initial.a
@@ -609,7 +609,7 @@
 ) ; END original.a
 
 
-(defun first.a (times mod-a)
+(defun first.a (times curr-time mod-a)
 ; ```````````````````````````
 ; Select the first time(s) in times, applying any mod-a as appropriate.
 ;
@@ -637,7 +637,7 @@
 ) ; END first.a
 
 
-(defun second.a (times mod-a)
+(defun second.a (times curr-time mod-a)
 ; ````````````````````````````
 ; Select the first time(s) in times, applying any mod-a as appropriate.
 ;
@@ -650,7 +650,7 @@
 ) ; END second.a
 
 
-(defun third.a (times mod-a)
+(defun third.a (times curr-time mod-a)
 ; ````````````````````````````
 ; Select the first time(s) in times, applying any mod-a as appropriate.
 ;
@@ -663,7 +663,7 @@
 ) ; END third.a
 
 
-(defun last.a (times mod-a)
+(defun last.a (times curr-time mod-a)
 ; ```````````````````````````````
 ; Select the last time(s) in times, applying any mod-a as appropriate.
 ; Synonyms: final.a
@@ -692,23 +692,23 @@
 ) ; END last.a
 
 
-(defun current.a (times mod-a)
+(defun current.a (times curr-time mod-a)
 ; ```````````````````````````````
 ; Select the time corresponding to the current time, applying any mod-a as appropriate.
-; NOTE: at the time of utterance being evaluated, the time of "now" is one step earlier than (ds-time *ds*)
+; NOTE: at the time of utterance being evaluated, the time of "now" is one step earlier than curr-time
 ; NOTE: the only mod-a that matters here is 'not', e.g. "not now"
 ; Synonyms: now.a
 ;
   (cond
     ; not current
     ((ttt:match-expr 'temporal-not-mod-a? mod-a)
-      (set-difference times (list (get-prev-time (ds-time *ds*)))))
+      (set-difference times (list (get-prev-time curr-time))))
     ; no/unknown mod-a
-    (t (list (get-prev-time (ds-time *ds*)))))
+    (t (list (get-prev-time curr-time))))
 ) ; END current.a
 
 
-(defun recent.a (times mod-a)
+(defun recent.a (times curr-time mod-a)
 ; ```````````````````````````````
 ; Select the recent time(s) in times, applying any mod-a as appropriate.
 ;
@@ -736,7 +736,7 @@
 ) ; END recent.a
 
 
-(defun previous.a (times mod-a)
+(defun previous.a (times curr-time mod-a)
 ; ```````````````````````````````
 ; Select the previous time(s) in times, applying any mod-a as appropriate.
 ; NOTE: if mod-a is some measure, e.g. in "two turns ago", this selects any time
@@ -769,15 +769,15 @@
     ; two turns previous
     ((ttt:match-expr '(mod-a (by.p (^* temporal-turn-noun?))) mod-a)
       (remove-if-not (lambda (time)
-        (is-apart-type time (ds-time *ds*) 'turn (time-np-to-num (cadadr mod-a)))) times))
+        (is-apart-type time curr-time 'turn (time-np-to-num (cadadr mod-a)))) times))
     ; two questions previous
     ((ttt:match-expr '(mod-a (by.p (^* temporal-question-noun?))) mod-a)
       (remove-if-not (lambda (time)
-        (is-apart-type time (ds-time *ds*) 'question (time-np-to-num (cadadr mod-a)))) times))
+        (is-apart-type time curr-time 'question (time-np-to-num (cadadr mod-a)))) times))
     ; two moves previous
     ((ttt:match-expr '(mod-a (by.p (^* temporal-move-noun?))) mod-a)
       (remove-if-not (lambda (time)
-        (is-apart-type time (ds-time *ds*) 'move (time-np-to-num (cadadr mod-a)))) times))
+        (is-apart-type time curr-time 'move (time-np-to-num (cadadr mod-a)))) times))
     ; previous + plural noun
     ((ttt:match-expr 'plur.mod-a mod-a)
       (latest-time times *temporal-plur-value*))
@@ -786,7 +786,7 @@
 ) ; END previous.a
 
 
-(defun next.a (times mod-a)
+(defun next.a (times curr-time mod-a)
 ; ```````````````````````````````
 ; Select the next time(s) in times, applying any mod-a as appropriate.
 ; NOTE: if mod-a is some measure, e.g. in "two turns ago", this selects any time
@@ -815,15 +815,15 @@
     ;; ; two turns next
     ;; ((ttt:match-expr '(mod-a (by.p (^* temporal-turn-noun?))) mod-a)
     ;;   (remove-if-not (lambda (time)
-    ;;     (is-apart-type time (ds-time *ds*) 'turn (time-np-to-num (cadadr mod-a)))) times))
+    ;;     (is-apart-type time curr-time 'turn (time-np-to-num (cadadr mod-a)))) times))
     ;; ; two questions next
     ;; ((ttt:match-expr '(mod-a (by.p (^* temporal-question-noun?))) mod-a)
     ;;   (remove-if-not (lambda (time)
-    ;;     (is-apart-now time (ds-time *ds*) 'question (time-np-to-num (cadadr mod-a)))) times))
+    ;;     (is-apart-now time curr-time 'question (time-np-to-num (cadadr mod-a)))) times))
     ;; ; two moves next
     ;; ((ttt:match-expr '(mod-a (by.p (^* temporal-move-noun?))) mod-a)
     ;;   (remove-if-not (lambda (time)
-    ;;     (is-apart-now time (ds-time *ds*) 'move (time-np-to-num (cadadr mod-a)))) times))
+    ;;     (is-apart-now time curr-time 'move (time-np-to-num (cadadr mod-a)))) times))
     ; next + plural noun
     ((ttt:match-expr 'plur.mod-a mod-a)
       (earliest-time times *temporal-plur-value*))
@@ -832,7 +832,7 @@
 ) ; END next.a
 
 
-(defun ever.a (times mod-a)
+(defun ever.a (times curr-time mod-a)
 ; ```````````````````````````````
 ; Select all time(s) in times, applying any mod-a as appropriate.
 ;
@@ -845,18 +845,18 @@
 ) ; END ever.a
 
 
-(defun just.a (times mod-a)
+(defun just.a (times curr-time mod-a)
 ; ```````````````````````````````
 ; Select the time in times that happens to be the previous turn, or nil of none exist,
 ; applying any mod-a as appropriate.
 ;
   (cond
     ; no/unknown mod-a
-    (t (remove-if-not (lambda (time) (is-prev time (get-prev-time (ds-time *ds*)))) times)))
+    (t (remove-if-not (lambda (time) (is-prev time (get-prev-time curr-time))) times)))
 ) ; END just.a
 
 
-(defun template.a (times mod-a)
+(defun template.a (times curr-time mod-a)
 ; ```````````````````````````````
 ; Select the [] time(s) in times, applying any mod-a as appropriate.
 ; Synonyms: []
@@ -916,7 +916,7 @@
 ) ; END eval-frequency-modifier
 
 
-(defun always.a (times mod-a)
+(defun always.a (times curr-time mod-a)
 ; ``````````````````````````````
 ; Select the times & props such that each prop occurs at every time. This is the same
 ; as ensuring that each prop occurs n times, where n is the length of times.
@@ -931,7 +931,7 @@
 ) ; END always.a
 
 
-(defun one-time.a (times mod-a)
+(defun one-time.a (times curr-time mod-a)
 ; ``````````````````````````````
 ; Select the times & props that occur one time (and no more than once).
 ;
@@ -939,7 +939,7 @@
 ) ; END one-time.a
 
 
-(defun two-time.a (times mod-a)
+(defun two-time.a (times curr-time mod-a)
 ; ``````````````````````````````
 ; Select the times & props that occur two times (and no more).
 ;
@@ -947,7 +947,7 @@
 ) ; END two-time.a
 
 
-(defun three-time.a (times mod-a)
+(defun three-time.a (times curr-time mod-a)
 ; ````````````````````````````````
 ; Select the times & props that occur three times (and no more).
 ;
@@ -955,7 +955,7 @@
 ) ; END three-time.a
 
 
-(defun four-time.a (times mod-a)
+(defun four-time.a (times curr-time mod-a)
 ; `````````````````````````````````
 ; Select the times & props that occur four times (and no more).
 ;
@@ -963,7 +963,7 @@
 ) ; END four-time.a
 
 
-(defun five-time.a (times mod-a)
+(defun five-time.a (times curr-time mod-a)
 ; `````````````````````````````````
 ; Select the times & props that occur five times (and no more).
 ;

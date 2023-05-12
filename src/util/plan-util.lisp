@@ -236,8 +236,8 @@
 
 
 
-(defun init-plan-from-schema (schema args &key plan-var-table schema-instances) ; {@}
-;`````````````````````````````````````````````````````````````````````````````````
+(defun init-plan-from-schema (schema args ds &key plan-var-table schema-instances) ; {@}
+;``````````````````````````````````````````````````````````````````````````````````
 ; Given a general schema, instantiate a schema instance (replacing
 ; variables occurring in the header with the supplied args, if any),
 ; and then instantiate a plan structure from the episodes list of that
@@ -263,7 +263,7 @@
       (return-from init-plan-from-schema nil))
 
     ; Create copy of general schema to instantiate
-    (setq schema-instance (instantiate-dial-schema schema args))
+    (setq schema-instance (instantiate-dial-schema schema args ds))
     (when schema-instances
       (setf (gethash (schema-id schema-instance) schema-instances) schema-instance))
 

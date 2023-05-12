@@ -214,8 +214,9 @@
 (defun filter-color (coords-list color)
 ; ```````````````````````````````````````
 ; Gets the coordinate(s) of blocks with the given color in coords-list.
+; TODO: using *temp-ds* here may be broken; revise this later.
 ;
-  (remove-if-not (lambda (c) (equal color (get-color (first c)))) coords-list)
+  (remove-if-not (lambda (c) (equal color (get-color (first c) *temp-ds*))) coords-list)
 ) ; END filter-color
 
 

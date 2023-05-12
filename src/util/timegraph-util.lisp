@@ -7,24 +7,24 @@
 
 (in-package :eta)
 
-(defun construct-timegraph ()
-;``````````````````````````````
+(defun construct-timegraph (ds)
+;````````````````````````````````
 ; Creates and returns a new timegraph structure
 ;
-  (setf (ds-tg *ds*) (timegraph:make-timegraph))
+  (setf (ds-tg ds) (timegraph:make-timegraph))
 ) ; END construct-timegraph
 
 
 
-(defun add-episode-to-timegraph (ep-name)
-;``````````````````````````````````````````
+(defun add-episode-to-timegraph (ep-name ds)
+;````````````````````````````````````````````
 ; Adds an episode to the timegraph by asserting it to be during the overall
 ; dialogue episode, E.
 ; NOTE: in the case where we want the timegraph structure to persist across
 ; multiple dialogues, the name and temporal relations between the dialogue episode
 ; will need to be modified.
 ;
-  (timegraph:assert-prop `(,ep-name :during E) (ds-tg *ds*))
+  (timegraph:assert-prop `(,ep-name :during E) (ds-tg ds))
 ) ; END add-episode-to-timegraph
 
 
@@ -51,24 +51,24 @@
 
 
 
-(defun update-lower-bound-timegraph (ep-name time-record)
-;`````````````````````````````````````````````````````````
+(defun update-lower-bound-timegraph (ep-name time-record ds)
+;`````````````````````````````````````````````````````````````
 ; Updates a timegraph episode with a lower quantitative bound, given a
 ; time record structure. This requires converting the record structure to
 ; a :local-time object.
 ;
   (timegraph:update-lower-bound-inst ep-name
-    (time-record-structure-to-timestamp time-record) (ds-tg *ds*))
+    (time-record-structure-to-timestamp time-record) (ds-tg ds))
 ) ; END update-lower-bound-timegraph
 
 
 
-(defun update-upper-bound-timegraph (ep-name time-record)
-;`````````````````````````````````````````````````````````
+(defun update-upper-bound-timegraph (ep-name time-record ds)
+;`````````````````````````````````````````````````````````````
 ; Updates a timegraph episode with an upper quantitative bound, given a
 ; time record structure. This requires converting the record structure to
 ; a :local-time object.
 ;
   (timegraph:update-upper-bound-inst ep-name
-    (time-record-structure-to-timestamp time-record) (ds-tg *ds*))
+    (time-record-structure-to-timestamp time-record) (ds-tg ds))
 ) ; END update-lower-bound-timegraph

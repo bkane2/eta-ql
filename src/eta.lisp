@@ -52,6 +52,115 @@
 
 (setf *print-circle* t) ; needed to prevent recursive loop when printing plan-step
 
+(defstruct agent-config
+;```````````````````````````````
+; contains the following fields:
+; avatar                : specify the name of one of the available avatars to use
+; avatar-name           : the full name of the avatar to use
+; subsystems-perception : A list of perception subsystems registered with Eta.
+;                         Supported: |Audio|, |Terminal|, |Blocks-World-System|
+; subsystems-specialist : A list of specialist subsystems registered with Eta.
+;                         Supported: |Spatial-Reasoning-System|
+; emotion-tags          : T to allow insertion of emotion tags (e.g., [SAD]) at beginning
+;                              of outputs. If no emotion tag is explicitly specified in the output,
+;                              a default [NEUTRAL] tag will be prepended.
+;                         NIL to disable emotion tags. Any tags at the beginning of :out
+;                              directives will be stripped.
+; generation-mode       : The method to use for generating responses at system reaction schema steps:
+;                         GPT3: uses GPT-3 to generate a response using a prompt created automatically from
+;                               the current schema, relevant knowledge, and sentence to paraphrase (if any).
+;                               Note that rule-based methods can still be used on top of GPT3.
+;                         RULE (default): uses pattern transduction trees to select reactions/responses.
+; interpretation-mode   : The method to use for interpreting user utterances as gist clauses:
+;                         GPT3: uses GPT-3 to rephrase utterances as gist clauses given context,
+;                               using a multi-example prompt.
+;                               Note that rule-based methods can still be used on top of GPT3; GPT3 will
+;                               only be used as a fallback if no gist clause is found using rule-based methods.
+;                         RULE (default): uses pattern transduction trees to extract gist clauses given context.
+; parser-mode           : The method to use for parsing gist clauses into ULFs:
+;                         BLLIP: uses the ULF parser created by Len Schubert based on the Charniak BLLIP parser. Requires
+;                                both the :lenulf and :standardize-ulf packages to be included in the dependencies, and for
+;                                BLLIP to be installed locally, with the correct path specified in the :lenulf package.
+;                         RULE (default): uses pattern transduction trees to parse gist clauses into ULF.
+; session-number        : The number session to load (a session-number of 1 corresponds to the files in the day1 directory
+;                         of an avatar) in a multi-session dialogue.
+;
+  (avatar "lissa-gpt")
+  (avatar-name "Eta")
+  (subsystems-perception '(|Audio| |Terminal|))
+  (subsystems-specialist '())
+  (emotion-tags NIL)
+  (model-names '(("information-retrieval" ("sentence-transformer" "sentence-transformers/all-distilroberta-v1" :api t))))
+  (generation-mode 'GPT3)
+  (interpretation-mode 'RULE)
+  (parser-mode 'RULE)
+  (session-number 1)
+) ; END defstruct agent-config
+
+
+
+
+
+(defstruct user-config
+;```````````````````````````````
+; contains the following fields:
+; user-id      : a unique ID for the user
+; user-name    : the name of the user
+; start-schema : the dialogue schema predicate to use to begin dialogue
+;
+  (user-id "_test")
+  (user-name "John Doe")
+  (start-schema 'have-eta-dialog.v)
+) ; END defstruct user-config
+
+
+
+
+
+(defstruct session
+;```````````````````
+; contains the following fields:
+; TODO
+;
+  (session-id (gentemp "SESSION"))
+  config-agent
+  config-user
+  ds
+  io-path
+  ^me
+  ^you
+  output-count
+  output-buffer
+  expected-step-failure-timer
+  quit-conversation
+) ; END defstruct session
+
+
+
+
+
+(defun init-session (config-agent config-user)
+;```````````````````````````````````````````````
+; Initializes a dialogue session given user configuration
+;
+  (let ((session (make-session)))
+    (setf (session-config-agent session) config-agent)
+    (setf (session-config-user session) config-user)
+    (setf (session-ds session) (init-ds))
+    ;; (setf (session-io-path session) ()) ; TODO
+    (setf (session-^me session) (intern (agent-config-avatar-name config-agent)))
+    (setf (session-^you session) (intern (user-config-user-name config-user)))
+    (setf (session-output-count session) 0)
+    (setf (session-output-buffer session) nil)
+    (setf (session-expected-step-failure-timer session) (get-universal-time))
+    (setf (session-quit-conversation) nil)
+    session
+)) ; END init-session
+
+
+
+
+
 (defstruct ds
 ;```````````````````````````````
 ; contains the following fields:
@@ -97,6 +206,57 @@
   time
   count
 ) ; END defstruct ds
+
+
+
+
+
+(defun init-ds () ; {@}
+;``````````````````````
+; Initializes a dialogue state record structure with any special
+; properties of the dialogue state (e.g. hash tables, task queues, etc.)
+;
+  (let ((ds (make-ds)))
+    ; Initialize task queue
+    (refill-task-queue ds)
+
+    ; Initialize schema instances hash table
+    (setf (ds-schema-instances ds) (make-hash-table))
+
+    ; Initialize plan var table
+    (setf (ds-plan-var-table ds) (make-hash-table))
+
+    ; Initialize hash table for aliases/equality sets
+    (setf (ds-equality-sets ds) (make-hash-table :test #'equal))
+
+    ; Initialize hash tables for User and Eta topic keys/gist clauses
+    (setf (ds-gist-kb-user ds) (make-hash-table :test #'equal))
+    (setf (ds-gist-kb-eta ds) (make-hash-table :test #'equal))
+
+    ; Initialize buffers
+    (setf (ds-buffers ds) (make-buffers))
+
+    ; Initialize conversation log
+    (setf (ds-conversation-log ds) nil)
+
+    ; Initialize fact hash tables
+    (setf (ds-context ds) (make-hash-table :test #'equal))
+    (setf (ds-memory ds) (make-hash-table :test #'equal))
+    (setf (ds-kb ds) (make-hash-table :test #'equal))
+
+    ; Initialize timegraph
+    (construct-timegraph ds)
+
+    ; Initialize time
+    (setf (ds-time ds) 'NOW0)
+    (store-time ds)
+    (update-time ds)
+
+    ; Initialize count
+    (setf (ds-count ds) 0)
+
+    ds
+)) ; END init-ds
 
 
 
@@ -242,8 +402,7 @@
   ))
 
   ; Global variable for dialogue record structure
-  (defvar *ds* (make-ds))
-  (init-ds)
+  (defparameter *ds* (init-ds))
 
   ; Global variable used to exit conversation when t
   (defparameter *quit-conversation* nil)
@@ -256,23 +415,18 @@
 
   ; Process any pre-defined aliases and concept sets
   (when (boundp '*concept-aliases*)
-    (mapcar (lambda (alias) (store-aliases-of-concept (first alias) (second alias) (third alias)))
+    (mapcar (lambda (alias) (store-aliases-of-concept (first alias) (second alias) (third alias) *ds*))
       *concept-aliases*))
   (when (boundp '*concept-sets*)
-    (mapcar (lambda (set) (store-concept-set (first set) (second set) (third set)))
+    (mapcar (lambda (set) (store-concept-set (first set) (second set) (third set) *ds*))
       *concept-sets*))
 
   ; Load initial knowledge (if any)
   (when (boundp '*init-knowledge*)
-    (mapcar #'store-in-kb *init-knowledge*)
+    (mapcar (lambda (fact) (store-in-kb fact *ds*)) *init-knowledge*)
     ; Embed and dump initial knowledge
     (precompute-knowledge-embeddings *init-knowledge*)
     (precompute-schema-embeddings (get-schemas-of-type 'epi-schema)))
-
-  ; Initialize time
-  (setf (ds-time *ds*) 'NOW0)
-  (store-time)
-  (update-time)
 
   ; Coreference mode
   ; 0 : simply reconstruct the original ulf
@@ -291,9 +445,6 @@
 
   ; A list of supported speech acts
   (defparameter *speech-acts* '(say-to.v paraphrase-to.v reply-to.v react-to.v))
-
-  ; Initialize count
-  (setf (ds-count *ds*) 0)
 
   ; Used for keeping track of output number in output.txt.
   (defparameter *output-count* 0)
@@ -335,41 +486,7 @@
 
 
 
-(defun init-ds () ; {@}
-;``````````````````````
-; Initializes a dialogue state record structure with any special
-; properties of the dialogue state (e.g. hash tables, task queues, etc.)
-;
-  ; Initialize task queue
-  (refill-task-queue)
 
-  ; Initialize schema instances hash table
-  (setf (ds-schema-instances *ds*) (make-hash-table))
-
-  ; Initialize plan var table
-  (setf (ds-plan-var-table *ds*) (make-hash-table))
-
-  ; Initialize hash table for aliases/equality sets
-  (setf (ds-equality-sets *ds*) (make-hash-table :test #'equal))
-
-  ; Initialize hash tables for User and Eta topic keys/gist clauses
-  (setf (ds-gist-kb-user *ds*) (make-hash-table :test #'equal))
-  (setf (ds-gist-kb-eta *ds*) (make-hash-table :test #'equal))
-
-  ; Initialize buffers
-  (setf (ds-buffers *ds*) (make-buffers))
-
-  ; Initialize conversation log
-  (setf (ds-conversation-log *ds*) nil)
-
-  ; Initialize fact hash tables
-  (setf (ds-context *ds*) (make-hash-table :test #'equal))
-  (setf (ds-memory *ds*) (make-hash-table :test #'equal))
-  (setf (ds-kb *ds*) (make-hash-table :test #'equal))
-
-  ; Initialize timegraph
-  (construct-timegraph)
-) ; END init-ds
 
 
 
@@ -474,11 +591,11 @@
 
 
 
-(defun refill-task-queue () ; {@}
+(defun refill-task-queue (ds) ; {@}
 ;```````````````````````````````````
 ; Refills the task queue after it becomes empty.
 ;
-  (setf (ds-task-queue *ds*) *tasks-list*)
+  (setf (ds-task-queue ds) *tasks-list*)
 ) ; END refill-task-queue
 
 
@@ -492,7 +609,7 @@
 ;
   ; When the task queue is empty, refill
   (when (null (ds-task-queue *ds*))
-    (refill-task-queue))
+    (refill-task-queue *ds*))
 
   ; Pop the current front of the task queue
   (let ((curr-task (car (ds-task-queue *ds*))))
@@ -632,11 +749,11 @@
       ; to inferring the negation would be using a lexical resource,
       ; such as WordNet, which has mutual exclusion relations.
       (mapcar (lambda (input)
-        (when (equal 'not (car input)) (remove-old-contextual-fact (second input)))) inputs)
+        (when (equal 'not (car input)) (remove-old-contextual-fact (second input) *ds*))) inputs)
       (remove-if (lambda (input) (equal 'not (car input))) inputs)
 
       ; Add facts to context
-      (when inputs (setq ep-name-new (store-new-contextual-facts inputs)))
+      (when inputs (setq ep-name-new (store-new-contextual-facts inputs *ds*)))
 
       ; Add facts to perceptions buffer for further interpretation
       (setq inputs (mapcar (lambda (input) (list ep-name-new input)) inputs))
@@ -1228,7 +1345,7 @@
 ; Given a schema predicate and a list of args, create a
 ; subplan from the instantiated schema.
 ;
-  (init-plan-from-schema (get-stored-schema schema-predicate) args
+  (init-plan-from-schema (get-stored-schema schema-predicate) args *ds*
     :plan-var-table (ds-plan-var-table *ds*)
     :schema-instances (ds-schema-instances *ds*))
 ) ; END plan-subschema
@@ -1395,7 +1512,7 @@
         (store-gist gist (get ep-name 'topic-keys) (ds-gist-kb-eta *ds*))
 
         ; Use previous user speech act as context for interpretation
-        (setq prev-step (find-prev-turn-of-agent *^you*))
+        (setq prev-step (find-prev-turn-of-agent *^you* *ds*))
         (when prev-step
           (setq prev-step-ep-name (dialogue-turn-episode-name prev-step))
           (setq user-gist-clauses (dialogue-turn-gists prev-step)))
@@ -1462,7 +1579,7 @@
         (setq expr (extract-set expr))
         (setq user-gists (apply #'append (mapcar #'get-gist-clauses-characterizing-episode expr)))
         (setq user-semantics (apply #'append (mapcar (lambda (e)
-          (resolve-references (get-semantic-interpretations-characterizing-episode e))) expr)))))
+          (resolve-references (get-semantic-interpretations-characterizing-episode e *ds*))) expr)))))
 
     (format t "~% ========== Eta Generation ==========") ; DEBUGGING
     ;; (format t "~% user gist clause (for ~a) is ~a" expr user-gists) ; DEBUGGING
@@ -1567,7 +1684,7 @@
         (setq expr (extract-set expr))
         (setq user-gists (apply #'append (mapcar #'get-gist-clauses-characterizing-episode expr)))
         (setq user-semantics (apply #'append (mapcar (lambda (e)
-          (resolve-references (get-semantic-interpretations-characterizing-episode e))) expr)))))
+          (resolve-references (get-semantic-interpretations-characterizing-episode e *ds*))) expr)))))
 
     ;; (format t "~% user gist clause (for ~a) is ~a" expr user-gists) ; DEBUGGING
     ;; (format t "~% user semantics (for ~a) is ~a ~%" expr user-semantics) ; DEBUGGING
@@ -1657,10 +1774,10 @@
       ((not (member '|Spatial-Reasoning-System| *registered-systems-specialist*))
         (setq ans '(Could not form final answer \: |Spatial-Reasoning-System| not registered \.)))
       (t
-        (setq tuple (generate-response (eval user-semantics) (eval expr)))
+        (setq tuple (generate-response (eval user-semantics) (eval expr) *ds*))
         (setq ans (first tuple))
         (setq eta-semantics (second tuple))
-        (store-semantic-interpretation-characterizing-episode eta-semantics ep-name '^me '^you)))
+        (store-semantic-interpretation-characterizing-episode eta-semantics ep-name '^me '^you *ds*)))
 
     (format t "answer to output: ~a~%" ans) ; DEBUGGING
 
@@ -1695,10 +1812,10 @@
       ((not (member '|Spatial-Reasoning-System| *registered-systems-specialist*))
         (setq ans '(Could not form final answer \: |Spatial-Reasoning-System| not registered \.)))
       (t
-        (setq tuple (generate-response (eval user-semantics) (eval expr)))
+        (setq tuple (generate-response (eval user-semantics) (eval expr) *ds*))
         (setq ans (first tuple))
         (setq eta-semantics (second tuple))
-        (store-semantic-interpretation-characterizing-episode eta-semantics ep-name '^me '^you)))
+        (store-semantic-interpretation-characterizing-episode eta-semantics ep-name '^me '^you *ds*)))
 
     (format t "gist answer to output: ~a~%" ans) ; DEBUGGING
 
@@ -1733,7 +1850,7 @@
 
     ;; (format t "proposal gist: ~a~%" proposal-gist) ; DEBUGGING
 
-    (store-gist-clause-characterizing-episode proposal-gist ep-name '^me '^you)
+    (store-gist-clause-characterizing-episode proposal-gist ep-name '^me '^you *ds*)
 
     (if (null proposal-gist)
       (return-from plan-proposal nil))
@@ -1775,7 +1892,7 @@
 
     ;; (format t "correction gist: ~a~%" correction-gist) ; DEBUGGING
 
-    (store-gist-clause-characterizing-episode correction-gist ep-name '^me '^you)
+    (store-gist-clause-characterizing-episode correction-gist ep-name '^me '^you *ds*)
 
     (if (null correction-gist)
       (return-from plan-correction nil))
@@ -2045,13 +2162,13 @@
         ; Otherwise, create a new episode constant subsuming each subepisode
         (t
           (setq ep-name (episode-name))
-          (store-init-time-of-episode ep-name)))
+          (store-init-time-of-episode ep-name *ds*)))
 
       ; Substitute in plan and store (wff ** ep-name) in context/memory
       ; (if not keyword step)
       (instantiate-plan-variable ep-name ep-var)
       (when (not (keywordp (car wff)))
-        (store-contextual-fact-characterizing-episode wff ep-name)))
+        (store-contextual-fact-characterizing-episode wff ep-name *ds*)))
 
     ; Recur for all supersteps
     (mapcar #'instantiate-superstep (plan-step-supersteps plan-step))
@@ -2079,12 +2196,12 @@
     ; Generate a constant for the episode and destructively substitute in plan
     (setq ep-name (episode-name))
     ; TODO: use episode-relations formulas to assert relations in timegraph
-    (store-init-time-of-episode ep-name)
+    (store-init-time-of-episode ep-name *ds*)
     (instantiate-plan-variable ep-name ep-var)
 
     ; Store (wff ** ep-name) in context/memory
     (when (not (keywordp (car wff)))
-      (store-contextual-fact-characterizing-episode wff ep-name))
+      (store-contextual-fact-characterizing-episode wff ep-name *ds*))
 
     ; Instantiate all supersteps of this step whose substeps are now fully completed
     (mapcar #'instantiate-superstep (plan-step-supersteps plan-step))
@@ -2333,7 +2450,7 @@
       ; (and appropriate substitutions made) if the expected episode is determined to be true.
       (t
         (setq match (inquire-truth-of-curr-step plan-step))
-        (if match (flush-context))
+        (if match (flush-context *ds*))
         match))
 )) ; END process-expected-step
 
@@ -2354,13 +2471,13 @@
     (setq wff (get-step-wff plan-step))
 
     ; Inquire about truth of wff in context; use first match
-    (setq match (get-from-context wff))
+    (setq match (get-from-context wff *ds*))
     (if (equal match T) (setq match (list wff)))
     (when match
       (setq match (car match))
 
       ; Get episode name corresponding to contextual fact
-      (setq ep-name (get-episode-from-contextual-fact match))
+      (setq ep-name (get-episode-from-contextual-fact match *ds*))
       
       ; Substitute that episode name for the episode variable in the plan
       (instantiate-plan-variable ep-name ep-var)
@@ -2376,7 +2493,7 @@
       ; currently necessary to prevent the program from automatically looping in the case
       ; where a :repeat-until episode consists of the user saying something and the agent
       ; replying, since the say-to.v expectation will keep matching the same fact in context.
-      (if (member (second match) *verbs-telic*) (remove-old-contextual-fact match)))
+      (if (member (second match) *verbs-telic*) (remove-old-contextual-fact match *ds*)))
 
     (if match t nil)
 )) ; END inquire-truth-of-curr-step
@@ -2408,8 +2525,8 @@
     ; essentially a no-op and isn't currently used for any further inference or replanning.
     ; TODO: this needs to be reworked after working out semantics for failed episodes.
     (if (equal '^you (car wff))
-      (store-contextual-fact-characterizing-episode `(^you do.v (no.d thing.n)) ep-name)
-      (store-contextual-fact-characterizing-episode '((no.d thing.n) happen.v) ep-name))
+      (store-contextual-fact-characterizing-episode `(^you do.v (no.d thing.n)) ep-name *ds*)
+      (store-contextual-fact-characterizing-episode '((no.d thing.n) happen.v) ep-name *ds*))
     
     t
 )) ; END fail-curr-step
@@ -2514,7 +2631,7 @@
             (format t "~%*** SAY-ACTION ~a~%    BY THE USER SHOULD SPECIFY A QUOTED WORD LIST OR VARIABLE" expr)))
 
         ; Use previous Eta speech act as context for interpretation
-        (setq prev-step (find-prev-turn-of-agent *^me*))
+        (setq prev-step (find-prev-turn-of-agent *^me* *ds*))
         (when prev-step
           (setq prev-step-ep-name (dialogue-turn-episode-name prev-step))
           (setq prev-step-gists (dialogue-turn-gists prev-step)))
@@ -2525,7 +2642,7 @@
           (setq relative-ep-names (extract-set (third curr-step-wff)))
           (dolist (relative-ep-name relative-ep-names)
             (setq prev-step-gists (append prev-step-gists
-              (get-gist-clauses-characterizing-episode relative-ep-name)))))
+              (get-gist-clauses-characterizing-episode relative-ep-name *ds*)))))
 
         (setq prev-step-gists (reverse (remove-duplicates prev-step-gists :test #'equal)))
 
@@ -2552,7 +2669,7 @@
 
         ; Store user gist-clauses in memory and input queue
         (dolist (user-gist user-gists)
-          (store-gist-clause-characterizing-episode user-gist ep-name '^you '^me))
+          (store-gist-clause-characterizing-episode user-gist ep-name '^you '^me *ds*))
         (setq user-gist-ep-names (mapcar (lambda (user-gist) (list ep-name-new user-gist)) user-gists))
         (enqueue-in-buffer-ordered user-gist-ep-names (buffers-gists (ds-buffers *ds*)))
 
@@ -2564,17 +2681,17 @@
 
         ; Store the semantic interpretations in memory and input queue
         (dolist (ulf user-semantics)
-          (store-semantic-interpretation-characterizing-episode ulf ep-name '^you '^me))
+          (store-semantic-interpretation-characterizing-episode ulf ep-name '^you '^me *ds*))
         (setq user-semantic-ep-names (mapcar (lambda (ulf) (list ep-name-new ulf)) user-semantics))
         (enqueue-in-buffer-ordered user-semantic-ep-names (buffers-semantics (ds-buffers *ds*)))
 
         ; Add the fact (^you reply-to.v <prev-step-ep-name>) to context (characterizing ep-name)
         (when prev-step-ep-name
-          (store-contextual-fact-characterizing-episode `(^you reply-to.v ,prev-step-ep-name) ep-name))
+          (store-contextual-fact-characterizing-episode `(^you reply-to.v ,prev-step-ep-name) ep-name *ds*))
 
         ; If current plan step is a relative speech act, add the fact (^you reply-to.v <rel-ep-name>) as well
         (when relative-ep-names
-          (store-contextual-fact-characterizing-episode `(^you reply-to.v ,(make-set relative-ep-names :use-and t)) ep-name))
+          (store-contextual-fact-characterizing-episode `(^you reply-to.v ,(make-set relative-ep-names :use-and t)) ep-name *ds*))
 
         ; Interpret any additional pragmatic facts from the gist-clause. For instance, the speech act
         ; (^you say-bye-to.v ^me) may be derived from the gist-clause (Goodbye \.).
@@ -2585,7 +2702,7 @@
 
         ; Add each pragmatic wff to context (characterizing ep-name) and input queue
         (dolist (ulf user-pragmatics)
-          (store-contextual-fact-characterizing-episode ulf ep-name))
+          (store-contextual-fact-characterizing-episode ulf ep-name *ds*))
         (setq user-pragmatic-ep-names (mapcar (lambda (ulf) (list ep-name-new ulf)) user-pragmatics))
         (enqueue-in-buffer-ordered user-pragmatic-ep-names (buffers-pragmatics (ds-buffers *ds*)))
 
@@ -2619,7 +2736,7 @@
         ;; (format t "~%Matched arguments = ~a" expr) ; DEBUGGING
 
         ; Check context for any current goal step; get reified action from goal step
-        (setq goal-step (car (get-from-context '(?ka step1-toward.p ?goal))))
+        (setq goal-step (car (get-from-context '(?ka step1-toward.p ?goal) *ds*)))
         (setq ka (first goal-step))
         
         (format t "~%Found ka = ~a" ka) ; DEBUGGING
@@ -2639,7 +2756,7 @@
           (store-in-context `((pair ^you ,ep-name) instance-of.p ,ka)))
         
         ; Store (^you try1.v (ka ...)) as characterizing ep-name regardless
-        (store-contextual-fact-characterizing-episode `(^you try1.v ,ka) ep-name)
+        (store-contextual-fact-characterizing-episode `(^you try1.v ,ka) ep-name *ds*)
 
       )
       ; Some other wff (currently nothing is done in this case)
@@ -2692,7 +2809,7 @@
     ; If using GPT3 for gist clause interpretation, add any gists found by GPT3.
     (when (equal *gist-interpreter* 'GPT3)
       ; Use previous user speech act as context for interpretation
-      (setq prev-step (find-prev-turn-of-agent *^you*))
+      (setq prev-step (find-prev-turn-of-agent *^you* *ds*))
       (when prev-step
         (setq prev-step-ep-name (dialogue-turn-episode-name prev-step))
         (setq user-gists (dialogue-turn-gists prev-step)))
@@ -2702,7 +2819,7 @@
       ; Store any gist clauses for episode and parent episode
       (mapcar (lambda (gist)
           (when (not (member 'nil gist))
-            (store-gist-clause-characterizing-episode gist ep-name '^me '^you)))
+            (store-gist-clause-characterizing-episode gist ep-name '^me '^you *ds*)))
         eta-gists))
 
     ; Get any obligations placed on the user from the schema that this episode is part of
@@ -2713,8 +2830,8 @@
       (push (make-dialogue-turn
           :agent *^me*
           :utterance expr
-          :gists (get-gist-clauses-characterizing-episode ep-name)
-          :semantics (get-semantic-interpretations-characterizing-episode ep-name)
+          :gists (get-gist-clauses-characterizing-episode ep-name *ds*)
+          :semantics (get-semantic-interpretations-characterizing-episode ep-name *ds*)
           :pragmatics nil
           :obligations user-obligations
           :episode-name ep-name)
@@ -2755,11 +2872,11 @@
     (setq user-semantics (resolve-references user-semantics))
 
     ; Get object locations from context
-    (setq object-locations (get-from-context '(?x at-loc.p ?y)))
+    (setq object-locations (get-from-context '(?x at-loc.p ?y) *ds*))
     ;; (format t "found object locations from context: ~a~%" object-locations) ; DEBUGGING
 
     ; Determine answers by recalling from history
-    (setq ans `(quote ,(recall-answer object-locations (eval user-semantics))))
+    (setq ans `(quote ,(recall-answer object-locations (eval user-semantics) *ds*)))
     (format t "recalled answer: ~a~%" ans) ; DEBUGGING
 
     ; Bind ans to variable given in plan (e.g. ?ans-relations)
@@ -2809,7 +2926,7 @@
 ; Adds a given expression to short term memory (context).
 ;
   ; Store formula in context
-  (store-new-contextual-facts (extract-set expr))
+  (store-new-contextual-facts (extract-set expr) *ds*)
 ) ; END execute-commit-to-STM
 
 
@@ -2835,7 +2952,7 @@
     ; Get goal name from expr, and corresponding record structure
     (setq goal-name (get-single-binding
       (cdr (bindings-from-ttt-match-deep '(_!1 step1-toward.p _!2) expr))))
-    (setq goal-schema (get-record-structure goal-name))
+    (setq goal-schema (get-record-structure goal-name *ds*))
     ; Substitute record structure for goal name in expr
     (setq expr (subst goal-schema goal-name expr))
     ; Request step towards goal schema from BW system
@@ -2851,7 +2968,7 @@
     (setq sk-name (get-single-binding
       (bindings-from-ttt-match-deep '(_!1 step1-toward.p _!2) ans)))
     ; Remove existing step1-toward.p propositions from context, and add new one(s)
-    (remove-from-context `(?x step1-toward.p ,goal-name))
+    (remove-from-context `(?x step1-toward.p ,goal-name) *ds*)
     (mapcar #'store-in-context ans)
     ; Substitute skolem name for skolem var in schema
     (format t "found ~a for variable ~a~%" sk-name sk-var)
@@ -2899,7 +3016,7 @@
     ; Store fact that sk-name chosen in context (removing any existing choice)
     ; TODO: perhaps choose.v actions are 'instantaneous' and should therefore be
     ; removed periodically, along with say-to.v actions etc.
-    (remove-from-context '(^me choose.v ?x))
+    (remove-from-context '(^me choose.v ?x) *ds*)
     (store-in-context `(^me choose.v ,sk-name))
 
     ; Bind variable to skolem constant in plan
@@ -2927,7 +3044,7 @@
     ; Get concept name from expr, and corresponding record structure
     (setq concept-name (get-single-binding
       (cdr (bindings-from-ttt-match-deep '(_!1 instance-of.p _!2) expr))))
-    (setq concept-schema (get-record-structure concept-name))
+    (setq concept-schema (get-record-structure concept-name *ds*))
     ; Substitute record structure for concept name in expr
     (setq expr (subst concept-schema concept-name expr))
     ; Request goal representation from BW system
@@ -2941,7 +3058,7 @@
     (setq sk-name (gentemp "BW-goal-rep"))
     (setq goal-schema (get-single-binding
       (bindings-from-ttt-match-deep '(_! goal-schema1.n) ans)))
-    (add-alias goal-schema sk-name)
+    (add-alias goal-schema sk-name *ds*)
     ; Substitute canonical names for record structures in relations
     (setq ans (subst concept-name concept-schema ans :test #'equal))
     (setq ans (subst sk-name goal-schema ans :test #'equal))
@@ -2986,12 +3103,12 @@
       ((setq bindings (bindings-from-ttt-match '(^me want.v (that _!)) goal-wff))
         (setq goal-clause (get-single-binding bindings))
         ; Check if goal clause is true in context
-        (if (get-from-context goal-clause) t nil))
+        (if (get-from-context goal-clause *ds*) t nil))
       ; Support for tensed version as well
       ((setq bindings (bindings-from-ttt-match '(^me ((pres want.v) (that _!))) goal-wff))
         (setq goal-clause (get-single-binding bindings))
         ; Check if goal clause is true in context
-        (if (get-from-context goal-clause) t nil))
+        (if (get-from-context goal-clause *ds*) t nil))
 
       (t
         ;; (format t "~%*** UNSUPPORTED GOAL ~a (~a) " goal-var goal-wff) ; DEBUGGING
@@ -3066,8 +3183,8 @@
   (let (sk-name sk-const)
     (setq sk-const (skolem (implode (cdr (explode sk-var)))))
     (setq sk-name
-      (car (find-all-instances-context `(:l (?x) (?x ,type)))))
-    (add-alias sk-const sk-name)
+      (car (find-all-instances-context `(:l (?x) (?x ,type)) *ds*)))
+    (add-alias sk-const sk-name *ds*)
     sk-name)
 ) ; END observe-variable-type
 
@@ -3118,7 +3235,7 @@
 ;
   (let (gist-clauses topic-keys facts)
     ;; (format t "~% ****** input sentence: ~a~%" sentence)
-    (setq gist-clauses (get-gist-clauses-characterizing-episode eta-action-name))
+    (setq gist-clauses (get-gist-clauses-characterizing-episode eta-action-name *ds*))
     ;; (format t "~% ****** gist clauses are ~a **** ~%" gist-clauses)
     ;; (format t "~% ****** quoted question returns ~a **** ~%" (some #'question? gist-clauses)) ; DEBUGGING
     (if (not (some #'question? gist-clauses))
@@ -3634,9 +3751,9 @@
            (eval-truth-value (third wff))))
     ; (wff1 ** e) - check memory
     ((characterizes-prop? wff)
-      (get-from-memory wff))
+      (get-from-memory wff *ds*))
     ; Otherwise, check to see if wff is true in context
-    (t (get-from-context wff))
+    (t (get-from-context wff *ds*))
 )) ; END eval-truth-value
 
 
@@ -3956,7 +4073,7 @@
         (setq newclause (fill-template (second pattern) parts))
         (setq result (choose-result-for1 newclause nil (car pattern) visited-subtrees))
         (if (and result (not (equal (car result) :out)))
-          (setq result (coref-ulf result)))
+          (setq result (coref-ulf result *ds*)))
         (return-from choose-result-for1 result))
 
       ;```````````````````````

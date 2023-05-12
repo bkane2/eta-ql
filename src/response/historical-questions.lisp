@@ -30,11 +30,15 @@
 (in-package :eta)
 
 
-(defun recall-answer (object-locations ulf)
-; ````````````````````````````````````````````
+(defun recall-answer (object-locations ulf ds)
+; ``````````````````````````````````````````````````````
 ; Given current observed block locations and the ULF of the query, recall the answer by consulting
 ; historical record of block moves stored in context.
 ;
+  ; TODO: using a global variable here is ugly, but avoids complicating the function headers.
+  ; This needs to be revisited eventually.
+  (defparameter *temp-ds* ds)
+
   (format t "object locations: ~a~%" object-locations) ; DEBUGGING
   (let ((coords (extract-coords object-locations))
         (when-question (extract-when-question ulf)) answer)
@@ -167,12 +171,12 @@
 ; Finds all times, constrained by the given adverbials, at which func holds. Return all
 ; satisfying times conjoined with the relevant propositions given by func.
 ; 
-  (let ((f (car func)) (args (cdr func)) (time (ds-time *ds*)) (scene coords) moves scene1 props times)
+  (let ((f (car func)) (args (cdr func)) (time (ds-time *temp-ds*)) (scene coords) moves scene1 props times)
     ; Backtrack through times until the initial time is reached
     (loop while time do
 
       ; Get moves and 'backup' current scene (so we can use the scene of the consecutive turn)
-      (setq moves (extract-moves (mapcar #'first (get-from-context `(nil @ ,time)))))
+      (setq moves (extract-moves (mapcar #'first (get-from-context `(nil @ ,time) *temp-ds*))))
       (setq scene1 scene)
       ; Undo all moves that happened at current time to get new scene
       (mapcar (lambda (move)
@@ -637,7 +641,7 @@
       (setq constraints-unary (list (resolve-unary-constraint (first np1)))))
 
     ; Get times corresponding to head noun
-    (setq times (eval-temporal-noun noun))
+    (setq times (eval-temporal-noun noun (ds-time *temp-ds*)))
     ; Constrain times using binary constraints, if any
     (mapcar (lambda (constraint)
       (setq times (remove-if-not (lambda (time)
@@ -841,7 +845,7 @@
 ; manipulation of context outside of the schemas. I'm not immediately sure how to generalize
 ; it, though.
 ;
-  (set-difference (get-from-context 'block.n) moves
+  (set-difference (get-from-context 'block.n *temp-ds*) moves
     :test (lambda (x y) (equal (car x) (car y))))
 ) ; END negate-moves
 
@@ -851,7 +855,7 @@
 ; Applies a unary constraint (e.g. RECENT.A) to list of times.
 ;
   (let ((constraint-eval (ttt:apply-rule `(/ (! adj? (mod-a? adj?))
-          (eval-temporal-modifier 'adj? ',times '(ensure-bound! mod-a?))) constraint :shallow t)))
+          (eval-temporal-modifier 'adj? ',times ',(ds-time *temp-ds*) '(ensure-bound! mod-a?))) constraint :shallow t)))
     (eval constraint-eval))
 ) ; END apply-unary-constraint
 
@@ -861,7 +865,7 @@
 ; Applies a binary constraint (e.g. (BEFORE.P NOW2)) to time and returns t or nil.
 ;
   (let ((constraint-eval (ttt:apply-rule `(/ (! (prep? _!) (mod-a? (prep? _!)))
-          (eval-temporal-relation 'prep? ',time '_! '(ensure-bound! mod-a?))) constraint :shallow t)))
+          (eval-temporal-relation 'prep? ',time '_! ',(ds-time *temp-ds*) '(ensure-bound! mod-a?))) constraint :shallow t)))
     (eval constraint-eval))
 ) ; END apply-binary-constraint
 
