@@ -358,13 +358,6 @@
 
   ; Global variables used for IO
   (defparameter *input* nil)
-  (defparameter *next-answer* nil)
-  (defparameter *next-input* nil)
-  (defparameter *next-perceptions* nil)
-  (defparameter *next-ulf* nil)
-  (defparameter *goal-rep* nil)
-  (defparameter *obj-schemas* nil)
-  (defparameter *chosen-obj-schema* nil)
   (defparameter *rewind-state* nil)
 
 ) ; END init
