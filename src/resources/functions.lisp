@@ -37,21 +37,3 @@
     ((and (listp (eval x))) (car (eval x)))
     ((stringp (eval x)) (eval x)))
 ) ; END main-answer.f
-
-
-
-(defun concept-noun-phrase.f (x)
-; ````````````````````````````````
-; Maps a concept name to an English noun phrase.
-;
-  (concept-noun-phrase! x)
-) ; END concept-noun-phrase.f
-
-
-
-(defun concept-noun.f (x)
-; ``````````````````````````
-; Maps a concept name to an English noun.
-;
-  (concept-noun! x)
-) ; END concept-noun.f
