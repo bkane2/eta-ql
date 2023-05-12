@@ -113,8 +113,8 @@
 
 
 
-(defun start (&key session-id)
-;````````````````````````````
+(defun start (&key session-id safe-mode)
+;`````````````````````````````````````````
 ; Starts the dialogue manager by loading config, loading the selected avatar files,
 ; and calling the top-level eta funtion.
 ;
@@ -182,7 +182,7 @@
 
     ; Run Eta (safe mode)
     ;`````````````````````````
-    (*safe-mode*
+    (safe-mode
       (handler-case (eta :subsystems-perception *subsystems-perception* :subsystems-specialist *subsystems-specialist*
                         :emotions *emotion-tags* :dependencies *dependencies* :model-names *model-names* :response-generator *generation-mode*
                         :gist-interpreter *interpretation-mode* :parser *parser-mode*)
