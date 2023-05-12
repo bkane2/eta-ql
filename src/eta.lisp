@@ -248,9 +248,6 @@
   ; Global variable used to exit conversation when t
   (defparameter *quit-conversation* nil)
 
-  ; Global stack of discourse states at each turn
-  (defparameter *ds-stack* nil)
-
   ; Set indexical variables
   (defparameter *^me*
     (if (and (boundp '*avatar-name*) *avatar-name*) (intern *avatar-name*) 'Eta))
@@ -300,7 +297,6 @@
   (setf (ds-count *ds*) 0)
 
   ; Used for keeping track of output number in output.txt.
-  ; TODO: figure out what to do with this variable when saving/rewinding dialogue state
   (defparameter *output-count* 0)
   ; Used for detecting whether to print "dummy" line to output.txt to prompt system to listen.
   (defparameter *output-listen-prompt* 0)
@@ -331,11 +327,6 @@
   (defparameter *emotions* nil)
   (defparameter *emotions-list* '([NEUTRAL] [SAD] [HAPPY] [WORRIED] [ANGRY]))
 
-  ; The dialogue instance is used to keep track of multiple dialogue trajectories within
-  ; a single session (in the case where the dialogue is rewound to a previous state), and
-  ; is incremented every time a rewind occurs.
-  (defparameter *dialogue-instance* 0)
-
   ; A list of any registered perception subsystems that Eta needs to listen to.
   ; Currently only supports '|Blocks-World-System|, '|Terminal|, and '|Audio|.
   (defparameter *registered-systems-perception* nil)
@@ -358,7 +349,6 @@
 
   ; Global variables used for IO
   (defparameter *input* nil)
-  (defparameter *rewind-state* nil)
 
 ) ; END init
 
@@ -401,24 +391,6 @@
   ; Initialize timegraph
   (construct-timegraph)
 ) ; END init-ds
-
-
-
-
-
-(defun rewind-ds (offset) ; {@}
-;```````````````````````````
-; Rewind the dialogue state to a previous state in the stack of recorded states
-; (specified by a relative offset).
-;
-  (setq *ds* (nth offset *ds-stack*))
-  (setq *ds-stack* (last *ds-stack* (- (length *ds-stack*) offset)))
-  ; Restart conversation log
-  (setq *dialogue-instance* (1+ *dialogue-instance*))
-  (ensure-log-files-exist :instance *dialogue-instance*)
-  (log-turn-write-all)
-  (setq *rewind-state* nil)
-) ; END rewind-ds
 
 
 
@@ -620,10 +592,6 @@
   (let ((curr-step (plan-node-step (ds-curr-plan *ds*))) ep-name wff subj certainty advance-plan?)
     (setq ep-name (get-step-ep-name curr-step))
     (setq wff (get-step-wff curr-step))
-
-    ; If a signal to rewind the dialogue state is detected, rewind to that state (if possible)
-    (when (check-for-rewind-signal)
-      (rewind-ds *rewind-state*))
 
     ; Get subject of the episode
     (setq subj (car wff))
@@ -2652,9 +2620,6 @@
         ; Determine any obligations placed on Eta by utterance (TODO)
         (setq eta-obligations nil)
 
-        ; Add discourse state to stack
-        (push (deepcopy-ds *ds*) *ds-stack*)
-
         ; Log and write dialogue turn
         (log-turn-write (car
           (push (make-dialogue-turn
@@ -2770,9 +2735,6 @@
 
     ; Get any obligations placed on the user from the schema that this episode is part of
     (setq user-obligations (get-step-obligations plan-step))
-
-    ; Add discourse state to stack
-    (push (deepcopy-ds *ds*) *ds-stack*)
 
     ; Log and write dialogue turn
     (log-turn-write (car

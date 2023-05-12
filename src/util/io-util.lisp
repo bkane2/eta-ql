@@ -91,31 +91,6 @@
 
 
 
-(defun valid-rewind-state-p (offset)
-;`````````````````````````````````````
-; Check whether a signal to rewind the dialogue state (relative offset) is valid.
-;
-  (and (integerp offset) (> offset 0) (< offset (length *ds-stack*)))
-) ; END valid-rewind-state-p
-
-
-
-(defun check-for-rewind-signal ()
-;````````````````````````````````````
-; Return t if a valid signal to rewind the dialogue state (i.e., a relative offset within
-; the range of previous dialogue states) is detected; nil otherwise.
-;
-  (load (get-io-path "rewindState.lisp"))
-  (cond
-    ((and *rewind-state* (valid-rewind-state-p *rewind-state*))
-      (with-open-file (outfile (get-io-path "rewindState.lisp")
-        :direction :output :if-exists :supersede :if-does-not-exist :create))
-      t)
-    (t nil))
-) ; END check-for-rewind-signal
-
-
-
 (defun write-subsystem (output system)
 ;`````````````````````````````````````````
 ; Writes output/"query" ULF propositions to io/out/<system>.lisp.
@@ -157,14 +132,13 @@
 ; Logs some a turn in the conversation-log directory.
 ; Temporarily disable pretty-printing so each line in the log file corresponds to a single turn.
 ;
-  (let* ((instance-dir (format nil "~a/" *dialogue-instance*))
-         (log-dir (get-io-path "conversation-log/"))
-         (fname-text  (concatenate  'string log-dir instance-dir "text.txt"))
-         (fname-text-r (concatenate 'string log-dir instance-dir "text-readable.txt"))
-         (fname-gist  (concatenate  'string log-dir instance-dir "gist.txt"))
-         (fname-sem   (concatenate  'string log-dir instance-dir "semantic.txt"))
-         (fname-prag  (concatenate  'string log-dir instance-dir "pragmatic.txt"))
-         (fname-oblg  (concatenate  'string log-dir instance-dir "obligations.txt"))
+  (let* ((log-dir (get-io-path "conversation-log/"))
+         (fname-text  (concatenate  'string log-dir "text.txt"))
+         (fname-text-r (concatenate 'string log-dir "text-readable.txt"))
+         (fname-gist  (concatenate  'string log-dir "gist.txt"))
+         (fname-sem   (concatenate  'string log-dir "semantic.txt"))
+         (fname-prag  (concatenate  'string log-dir "pragmatic.txt"))
+         (fname-oblg  (concatenate  'string log-dir "obligations.txt"))
          (agent (dialogue-turn-agent turn)))
     (setq *print-pretty* nil)
     (with-open-file (outfile fname-text   :direction :output :if-exists :append :if-does-not-exist :create)

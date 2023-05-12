@@ -15,25 +15,24 @@
 ) ; END get-io-path
 
 
-(defun ensure-log-files-exist (&key (instance 0))
-;``````````````````````````````````````````````````
+(defun ensure-log-files-exist ()
+;```````````````````````````````````
 ; Ensure that empty conversation log files exist for the given avatar configuration and current dialogue instance.
 ;
-  (let ((instance-dir (format nil "~a/" instance)))
-    (ensure-directories-exist (concatenate 'string (get-io-path "conversation-log/") instance-dir))
-    (with-open-file (outfile (concatenate 'string (get-io-path "conversation-log/") instance-dir "text.txt")
-      :direction :output :if-exists :supersede :if-does-not-exist :create))
-    (with-open-file (outfile (concatenate 'string (get-io-path "conversation-log/") instance-dir "text-readable.txt")
-      :direction :output :if-exists :supersede :if-does-not-exist :create))
-    (with-open-file (outfile (concatenate 'string (get-io-path "conversation-log/") instance-dir "gist.txt")
-      :direction :output :if-exists :supersede :if-does-not-exist :create))
-    (with-open-file (outfile (concatenate 'string (get-io-path "conversation-log/") instance-dir "semantic.txt")
-      :direction :output :if-exists :supersede :if-does-not-exist :create))
-    (with-open-file (outfile (concatenate 'string (get-io-path "conversation-log/") instance-dir "pragmatic.txt")
-      :direction :output :if-exists :supersede :if-does-not-exist :create))
-    (with-open-file (outfile (concatenate 'string (get-io-path "conversation-log/") instance-dir "obligations.txt")
-      :direction :output :if-exists :supersede :if-does-not-exist :create))
-)) ; END ensure-log-files-exist
+  (ensure-directories-exist (concatenate 'string (get-io-path "conversation-log/")))
+  (with-open-file (outfile (concatenate 'string (get-io-path "conversation-log/") "text.txt")
+    :direction :output :if-exists :supersede :if-does-not-exist :create))
+  (with-open-file (outfile (concatenate 'string (get-io-path "conversation-log/") "text-readable.txt")
+    :direction :output :if-exists :supersede :if-does-not-exist :create))
+  (with-open-file (outfile (concatenate 'string (get-io-path "conversation-log/") "gist.txt")
+    :direction :output :if-exists :supersede :if-does-not-exist :create))
+  (with-open-file (outfile (concatenate 'string (get-io-path "conversation-log/") "semantic.txt")
+    :direction :output :if-exists :supersede :if-does-not-exist :create))
+  (with-open-file (outfile (concatenate 'string (get-io-path "conversation-log/") "pragmatic.txt")
+    :direction :output :if-exists :supersede :if-does-not-exist :create))
+  (with-open-file (outfile (concatenate 'string (get-io-path "conversation-log/") "obligations.txt")
+    :direction :output :if-exists :supersede :if-does-not-exist :create))
+) ; END ensure-log-files-exist
 
 
 (defun clean-io-files ()
@@ -77,10 +76,7 @@
   (with-open-file (outfile (get-io-path "turn-output.txt")
     :direction :output :if-exists :supersede :if-does-not-exist :create))
   (with-open-file (outfile (get-io-path "turn-emotion.txt")
-    :direction :output :if-exists :supersede :if-does-not-exist :create))
-  ; Delete the content of rewindState.lisp, if it exists, otherwise create
-  (with-open-file (outfile (get-io-path "rewindState.lisp")
-    :direction :output :if-exists :supersede :if-does-not-exist :create))                                             
+    :direction :output :if-exists :supersede :if-does-not-exist :create))                                            
 ) ; END clean-io-files
 
 
