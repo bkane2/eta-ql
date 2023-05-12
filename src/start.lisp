@@ -125,48 +125,44 @@
 
 
 
-(defun start (&key agent-id)
+(defun start (&key session-id)
 ;````````````````````````````
 ; Starts the dialogue manager by loading config, loading the selected avatar files,
 ; and calling the top-level eta funtion.
 ;
 
-  ; Load the config file corresponding to the session's agent-id.
-  ; TODO: could modify this to auto-generate a default config file if one doesn't exist for the agent-id.
-  (when (and agent-id (or (stringp agent-id) (numberp agent-id)) (not (boundp '*agent-id*)))
-    (setq *agent-id* agent-id))
+  ; Load the config file corresponding to the session's session-id.
+  ; TODO: could modify this to auto-generate a default config file if one doesn't exist for the session-id.
+  (when (and session-id (or (stringp session-id) (numberp session-id)) (not (boundp '*session-id*)))
+    (setq *session-id* session-id))
   (load
-    (if (and (boundp '*agent-id*) *agent-id* (or (stringp *agent-id*) (numberp *agent-id*))
-            (probe-file (format nil "config/~a.lisp" *agent-id*)))
-      (format nil "config/~a.lisp" *agent-id*)
+    (if (and (boundp '*session-id*) *session-id* (or (stringp *session-id*) (numberp *session-id*))
+            (probe-file (format nil "config/~a.lisp" *session-id*)))
+      (format nil "config/~a.lisp" *session-id*)
       (format nil "config/config.lisp")))
 
 
   ; Set IO path based on agent ID (using basic path if no ID is defined)
   (defparameter *io-path*
-    (if (and (boundp '*agent-id*) *agent-id* (or (stringp *agent-id*) (numberp *agent-id*)))
-      (format nil "./io/~a/" *agent-id*)
+    (if (and (boundp '*session-id*) *session-id* (or (stringp *session-id*) (numberp *session-id*)))
+      (format nil "./io/~a/" *session-id*)
       (format nil "./io/")))
 
 
   ; If live mode, load *user-id* and *user-name* from sessionInfo file (if it exists).
   ; Otherwise, manually set (or prompt user for input).
   ;```````````````````````````````````````````````````````````````````````
-  (defparameter *user-id* nil)
-  (defparameter *user-name* nil)
-  (if (probe-file (get-io-path "sessionInfo.lisp"))
-    (load (get-io-path "sessionInfo.lisp")))
-  (when (not *user-id*)
+  (when (or (not (boundp '*user-id*)) (not *user-id*))
     (defparameter *user-id* "_test")
     ;; (format t "~%~%Enter user-id ~%")
     ;; (princ "user id: ") (finish-output)
     ;; (setq *user-id* (write-to-string (read))))
   )
-  (when (and (not *user-name*) (member '|Terminal| *subsystems-perception*))
+  (when (and (or (not (boundp '*user-name*)) (not *user-name*)) (member '|Terminal| *subsystems-perception*))
     (format t "~%~%Enter user name ~%")
     (princ "user name: ") (finish-output)
     (setq *user-name* (read-line)))
-  (when (not *user-name*)
+  (when (or (not (boundp '*user-name*)) (not *user-name*))
     (setq *user-name* "Test User"))
 
 

@@ -189,7 +189,7 @@
           (fname-prag (concatenate 'string "logs/logs_out/pragmatic/" (pathname-name *read-log*) ".txt"))
           (fname-oblg (concatenate 'string "logs/logs_out/obligations/" (pathname-name *read-log*) ".txt"))
           (agent (if (equal (dialogue-turn-agent turn) *^me*)
-            (if (boundp '*agent-id*) (string-upcase (string *agent-id*)) "ETA")
+            (if (boundp '*session-id*) (string-upcase (string *session-id*)) "ETA")
             "USER")))
       (setq *print-pretty* nil)
       (with-open-file (outfile fname-text :direction :output :if-exists :append :if-does-not-exist :create)
