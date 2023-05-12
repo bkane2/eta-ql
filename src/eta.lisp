@@ -297,8 +297,6 @@
 
   ; Used for keeping track of output number in output.txt.
   (defparameter *output-count* 0)
-  ; Used for detecting whether to print "dummy" line to output.txt to prompt system to listen.
-  (defparameter *output-listen-prompt* 0)
 
   ; Used for maintaining a buffer of consecutive Eta outputs so that they can be combined and
   ; written as a single turn to turn-output.txt
@@ -595,14 +593,12 @@
     (cond
       ; If keyword episode, execute step
       ((keywordp subj)
-        (setq *output-listen-prompt* 0) ; stop listening for user audio
         (setq advance-plan? (process-keyword-step curr-step)))
       ; If expected step by the user, process expectation
       ((equal subj '^you)
         (setq advance-plan? (process-expected-step curr-step)))
       ; If intended step by Eta, execute step if possible
       ((equal subj '^me)
-        (setq *output-listen-prompt* 0) ; stop listening for user audio
         (setq advance-plan? (process-intended-step curr-step)))
       ; Otherwise, treat step as expectation
       (t (setq advance-plan? (process-expected-step curr-step))))
@@ -2341,8 +2337,6 @@
 ; Returns t if the plan should be advanced; nil otherwise.
 ;
   (let (certainty)
-    ; Output prompt for external system to listen for user audio (but only once)
-    (setq *output-listen-prompt* (if (= *output-listen-prompt* 0) 1 2))
 
     ; Write output buffer
     (when *output-buffer*

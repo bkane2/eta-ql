@@ -41,15 +41,6 @@
 ; after reading input. However, I suspect we want punctuation since Google ASR is
 ; capable of it. The pattern-matching files therefore need to take punctuation into account.
 ; 
-  ; Write empty star line to output to prompt avatar to listen
-  ; TODO: there has to be a better way of doing this...
-  (when (= *output-listen-prompt* 1)
-    (setq *output-count* (1+ *output-count*))
-    (with-open-file (outfile (get-io-path "output.txt")
-      :direction :output :if-exists :append :if-does-not-exist :create)
-      (format outfile "~%*~D: dummy" *output-count*))
-    (setq *output-listen-prompt* 2))
-
   ; Read from Audio input
   (setq *input* nil)
   (load (get-io-path "in/Audio.lisp"))
