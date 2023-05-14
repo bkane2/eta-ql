@@ -274,7 +274,7 @@
     (setf (session-config-user session) config-user)
     (setf (session-ds session) (init-ds))
     (setf (session-io-path session)
-      (concatenate 'string *io-dir* (agent-config-avatar config-agent) "/" (string (session-id session)) "/"))
+      (concatenate 'string *io-dir* (agent-config-avatar config-agent) "/" (user-config-user-id config-user) "/"))
     (setf (session-^me session) (intern (agent-config-avatar-name config-agent)))
     (setf (session-^you session) (intern (user-config-user-name config-user)))
     (setf (session-output-count session) 0)
@@ -299,7 +299,7 @@
     ; Create plan from initial schema (if doesn't exist, set quit-conversation to t)
     (setq start-schema (user-config-start-schema config-user))
     (when (null (get-stored-schema start-schema))
-      (format t "***  start schema for session ~a not found. Quitting conversation.~%" (session-id session))
+      (format t "***  start schema for session ~a not found. Quitting conversation.~%" (user-config-user-id config-user))
       (setf (session-quit-conversation session) t)
       (return-from init-session session))
     (setf (ds-curr-plan (session-ds session)) (plan-subschema start-schema nil (session-ds session)))
@@ -729,7 +729,7 @@
       (setq config-user (apply #'make-user-config (read-config config-fname)))
       (setq new-session (init-session *config-agent* config-user))
       (create-session-io-files new-session)
-      (format t "~% == Adding new session ~a~%" (session-id new-session))
+      (format t "~% == Adding new session ~a~%" (user-config-user-id config-user))
       (push new-session *sessions*))
 )) ; END listen-for-new-sessions
 
