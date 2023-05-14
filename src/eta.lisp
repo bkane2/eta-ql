@@ -720,11 +720,11 @@
 (defun listen-for-new-sessions ()
 ;```````````````````````````````````
 ; Listens for new sessions by reading the paths of new config files from
-; "/io/new-sessions.lisp", creating user-config structs, and initiating a new
+; "/io/new-sessions.txt", creating user-config structs, and initiating a new
 ; session.
 ;
   (let (config-fnames config-user new-session)
-    (setq config-fnames (read-new-sessions (concatenate 'string *io-dir* "new-sessions.lisp")))
+    (setq config-fnames (read-new-sessions (concatenate 'string *io-dir* "new-sessions.txt")))
     (dolist (config-fname config-fnames)
       (setq config-user (apply #'make-user-config (read-config config-fname)))
       (setq new-session (init-session *config-agent* config-user))
@@ -745,7 +745,7 @@
   (ensure-directories-exist (concatenate 'string *io-dir* (agent-config-avatar *config-agent*) "/"))
   (ensure-directories-exist *embedding-path*)
   (ensure-directories-exist (concatenate 'string *embedding-path* "schemas/"))
-  (with-open-file (outfile (concatenate 'string *io-dir* "new-sessions.lisp")
+  (with-open-file (outfile (concatenate 'string *io-dir* "new-sessions.txt")
     :direction :output :if-exists :supersede :if-does-not-exist :create))
 ) ; END create-process-io-files
 
