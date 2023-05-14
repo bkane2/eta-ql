@@ -10,11 +10,16 @@
 ;`````````````````````````````````
 ; Reads a list of new sessions from a given file.
 ;
-  (with-open-file (stream fname)
-    (loop for line = (read-line stream nil)
-          while line
-          collect line))
-) ; END read-new-sessions
+  (let (new-sessions)
+    (setq new-sessions (with-open-file (stream fname)
+      (loop for line = (read-line stream nil)
+            while line
+            collect line)))
+    ; Clear file
+    (with-open-file (outfile fname
+        :direction :output :if-exists :supersede :if-does-not-exist :create))
+    new-sessions
+)) ; END read-new-sessions
 
 
 
