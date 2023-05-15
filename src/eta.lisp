@@ -707,7 +707,8 @@
           ((get-output-buffer)
             (write-output-buffer (get-output-buffer) (get-io-path))
             (set-output-buffer nil)
-            (write-closed-session "closed-sessions.txt" (get-user-id))))
+            (write-closed-session "closed-sessions.txt" (get-user-id)))
+          (t (write-closed-session "closed-sessions.txt" (get-user-id))))
         (setq *sessions* (cdr *sessions*)))
       ; Once the session queue is empty, move all dequeued sessions back to queue and
       ; add any newly registered sessions.
