@@ -23,6 +23,18 @@
 
 
 
+(defun read-closed-sessions (fname)
+;```````````````````````````````````
+; Reads a list of closed sessions from a given file.
+;
+  (with-open-file (stream fname)
+    (loop for line = (read-line stream nil)
+          while line
+          collect line))
+) ; END read-closed-sessions
+
+
+
 (defun write-closed-session (fname session-id)
 ;`````````````````````````````````````````````````
 ; Writes the ID of a finished session to a given file.

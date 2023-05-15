@@ -691,6 +691,7 @@
 
   (defparameter *sessions* nil)
   (defparameter *sessions-dequeue* nil)
+  (defparameter *sessions-closed* nil)
 
   (format t "~% ==== ETA READY TO START REGISTERING SESSIONS~%")
 
@@ -731,12 +732,17 @@
 ;
   (let (config-fnames config-user new-session)
     (setq config-fnames (read-new-sessions (concatenate 'string *io-dir* "new-sessions.txt")))
+    (setq closed-sessions (read-closed-sessions (concatenate 'string *io-dir* "closed-sessions.txt")))
     (dolist (config-fname config-fnames)
       (setq config-user (apply #'make-user-config (read-config config-fname)))
-      (setq new-session (init-session *config-agent* config-user))
-      (create-session-io-files new-session)
-      (format t "~% == Adding new session ~a~%" (user-config-user-id config-user))
-      (push new-session *sessions*))
+      (cond
+        ((member (user-config-user-id config-user) closed-sessions :test #'string-equal)
+          (format t "~% == Session ~a already completed~%" (user-config-user-id config-user)))
+        (t
+          (setq new-session (init-session *config-agent* config-user))
+          (create-session-io-files new-session)
+          (format t "~% == Adding new session ~a~%" (user-config-user-id config-user))
+          (push new-session *sessions*))))
 )) ; END listen-for-new-sessions
 
 
