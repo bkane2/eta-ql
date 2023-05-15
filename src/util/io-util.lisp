@@ -23,6 +23,18 @@
 
 
 
+(defun write-closed-session (fname session-id)
+;`````````````````````````````````````````````````
+; Writes the ID of a finished session to a given file.
+;
+  (with-open-file (f fname :direction :output 
+                           :if-exists :append 
+                           :if-does-not-exist :create)
+    (format f "~a~%" session-id))
+) ; END write-closed-session
+
+
+
 (defun read-config (fname)
 ;`````````````````````````````
 ; Reads a config file (expects list of alternating keyword arguments).

@@ -209,6 +209,10 @@
   (if *sessions* (concatenate 'string (session-io-path (car *sessions*)) fname))
 ) ; END get-io-path
 
+(defun get-user-id ()
+  (if *sessions* (user-config-user-id (session-config-user (car *sessions*))))
+) ; END get-user-id
+
 (defun get-ds ()
   (if *sessions* (session-ds (car *sessions*)))
 ) ; END get-ds
@@ -702,7 +706,8 @@
             (push (car *sessions*) *sessions-dequeue*))
           ((get-output-buffer)
             (write-output-buffer (get-output-buffer) (get-io-path))
-            (set-output-buffer nil)))
+            (set-output-buffer nil)
+            (write-closed-session "closed-sessions.txt" (get-user-id))))
         (setq *sessions* (cdr *sessions*)))
       ; Once the session queue is empty, move all dequeued sessions back to queue and
       ; add any newly registered sessions.
@@ -746,6 +751,8 @@
   (ensure-directories-exist *embedding-path*)
   (ensure-directories-exist (concatenate 'string *embedding-path* "schemas/"))
   (with-open-file (outfile (concatenate 'string *io-dir* "new-sessions.txt")
+    :direction :output :if-exists :supersede :if-does-not-exist :create))
+  (with-open-file (outfile (concatenate 'string *io-dir* "closed-sessions.txt")
     :direction :output :if-exists :supersede :if-does-not-exist :create))
 ) ; END create-process-io-files
 
