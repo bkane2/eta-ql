@@ -548,7 +548,7 @@
       (when (variable? (car wff))
         (setq var (car wff))
         ; Get skolem name, and bind in schema
-        (setq sk-name (observe-variable-type var (second wff)))
+        (setq sk-name (observe-variable-type var (second wff) ds))
         (bind-variable-in-schema schema var sk-name)
         (setq wff (subst sk-name var wff)))
       ; Store type as fact in context.
@@ -568,6 +568,23 @@
       (setq wff (second pair))
       (store-in-context wff ds))
 )) ; END instantiate-dial-schema-rigid-conds
+
+
+
+(defun observe-variable-type (sk-var type ds)
+;`````````````````````````````````````````````
+; Through observation of the world, find an entity which can fill in
+; variable of type (variable assumed to be neither in schema header or
+; filled in at later point in schema).
+; USES DS
+;
+  (let (sk-name sk-const)
+    (setq sk-const (skolem (implode (cdr (explode sk-var)))))
+    (setq sk-name
+      (car (find-all-instances-context `(:l (?x) (?x ,type)) ds)))
+    (add-alias sk-const sk-name ds)
+    sk-name)
+) ; END observe-variable-type
 
 
 

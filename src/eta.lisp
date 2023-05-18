@@ -3445,24 +3445,6 @@
 
 
 
-(defun observe-variable-type (sk-var type) ; {@}
-;```````````````````````````````````````````
-; Through observation of the world, find an entity which can fill in
-; variable of type (variable assumed to be neither in schema header or
-; filled in at later point in schema).
-;
-  (let (sk-name sk-const)
-    (setq sk-const (skolem (implode (cdr (explode sk-var)))))
-    (setq sk-name
-      (car (find-all-instances-context `(:l (?x) (?x ,type)) (get-ds))))
-    (add-alias sk-const sk-name (get-ds))
-    sk-name)
-) ; END observe-variable-type
-
-
-
-
-
 (defun choose-variable-restrictions (sk-var restrictions) ; {@}
 ;``````````````````````````````````````````````````````````
 ; Handles any indefinite quantification of a variable filled
