@@ -339,6 +339,7 @@
 ;                    to the beginning, with all moves/etc. occurring at subsequent times
 ; count            : number of Eta outputs generated so far (maintained for latency enforcement, i.e.,
 ;                    not repeating a previously used response too soon)
+; time-last-used   : a hash table of last-used times for each visited rule node (for latency enforcement).
 ;
 ; TODO: currently reference-list and equality-sets are separate things, though they serve a similar
 ; purpose, namely keeping track of which entities co-refer (e.g. skolem variable and noun phrase).
@@ -361,7 +362,26 @@
   tg
   time
   count
+  time-last-used
 ) ; END defstruct ds
+
+
+
+
+
+;`````````````````````````````````````
+; Accessor functions for ds
+;
+
+(defun get-time-last-used (ds rule-node)
+  (when (null (gethash rule-node (ds-time-last-used ds)))
+    (set-time-last-used ds rule-node -10000))
+  (gethash rule-node (ds-time-last-used ds))
+) ; END get-time-last-used
+
+(defun set-time-last-used (ds rule-node time)
+  (setf (gethash rule-node (ds-time-last-used ds)) time)
+) ; END set-time-last-used
 
 
 
@@ -410,6 +430,9 @@
 
     ; Initialize count
     (setf (ds-count ds) 0)
+
+    ; Initialize time-last-used hash table
+    (setf (ds-time-last-used ds) (make-hash-table :test #'equal))
 
     ds
 )) ; END init-ds
@@ -4094,10 +4117,10 @@
 ; If the rule node has directive property :out, then its 'pattern'
 ; property supplies a reassembly rule. If the latency requirement 
 ; of the rule is met, the result based on the reassembly rule and
-; the 'parts' list is returned (after updating 'time-last-used'). 
+; the 'parts' list is returned (after updating time-last-used). 
 ; The latency criterion uses the 'latency' property of 'rule-node' 
-; jointly with the 'time-last-used' property and the global result 
-; count, (ds-count (get-ds)).
+; jointly with the (ds-time-last-used (get-ds)) hash table and the
+; result count, (ds-count (get-ds)).
 ;
 ; If the rule node has directive property :subtree, then 'pattern'
 ; will just be the name of another choice tree. If the latency 
@@ -4178,7 +4201,7 @@
 
     ; If latency is being enforced, skip rule if it was used too recently
     (when (and directive *use-latency*
-            (< (ds-count (get-ds)) (+ (get rule-node 'time-last-used)
+            (< (ds-count (get-ds)) (+ (get-time-last-used (get-ds) rule-node)
                           (get rule-node 'latency))))
       (return-from choose-result-for1
         (choose-result-for1 clause parts (get rule-node 'next) visited-subtrees)))
@@ -4233,7 +4256,7 @@
       ; Recursively obtain a result from the choice tree specified via its
       ; root name, given as 'pattern'
       ((eq directive :subtree)
-        (setf (get rule-node 'time-last-used) (ds-count (get-ds)))
+        (set-time-last-used (get-ds) rule-node (ds-count (get-ds)))
         (cond
           ; Pattern is wrong format
           ((not (atom pattern)) (return-from choose-result-for1 nil))
@@ -4255,7 +4278,7 @@
       ; some portion of 'clause', whose results should then be used
       ; (after re-tagging) in the recursive search.
       ((eq directive :subtree+clause)
-        (setf (get rule-node 'time-last-used) (ds-count (get-ds)))
+        (set-time-last-used (get-ds) rule-node (ds-count (get-ds)))
         (setq newclause (fill-template (second pattern) parts))
         (return-from choose-result-for1
           (choose-result-for1 newclause nil (car pattern)
@@ -4335,7 +4358,7 @@
       ; TODO: Implement coreference resolution (gist case)
       ((eq directive :gist-coref)
         (setq result (cons directive (fill-template pattern parts)))
-        (setf (get rule-node 'time-last-used) (ds-count (get-ds)))
+        (set-time-last-used (get-ds) rule-node (ds-count (get-ds)))
         (setq result (coref-gist result))
         (return-from choose-result-for1 result))
 
@@ -4359,7 +4382,7 @@
           (setq result (cons (global-var-to-pred (car result)) (cdr result))))
         ; Update count and return result
         (setq result (cons directive result))
-        (setf (get rule-node 'time-last-used) (ds-count (get-ds)))
+        (set-time-last-used (get-ds) rule-node (ds-count (get-ds)))
         (return-from choose-result-for1 result))
 
       ; A directive is not recognized

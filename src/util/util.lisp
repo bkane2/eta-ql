@@ -2896,9 +2896,6 @@
           (setf (get (cdar stack) 'latency) (car n))
           ;; (format t "~%'latency' property of ~a is ~%  ~a"
           ;;           (cdar stack) (get (cdar stack) 'latency)) ; DEBUGGING
-          ; Set the 'time-last-used' value to be more negative than any latency, so that
-          ; no rule will be blocked initially
-          (setf (get (cdar stack) 'time-last-used) -10000)
           ; Set the 'directive' property to the second element of the pair
           (setf (get (cdar stack) 'directive) (second n))
           ;; (format t "~%'directive' property of ~a is ~%  ~a"
@@ -2906,20 +2903,6 @@
         )))
   "RULE TREE HAS BEEN BUILT")
 ) ; END readrules
-
-
-
-(defun reset-rule (rule)
-;`````````````````````````
-; Reset 'time-last-used' to -100 in all assembly rules dominated by rule
-;
-  (cond
-    ((null rule) nil)
-    (t (reset-rule (get rule 'children))
-      (reset-rule (get rule 'next))
-      (if (get rule 'time-last-used)
-        (setf (get rule 'time-last-used) -100))))
-) ; END reset-rule
 
 
 
