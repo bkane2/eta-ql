@@ -4,6 +4,8 @@
 ;; Contains functions used for interfacing with GPT.
 ;;
 
+(in-package :eta)
+
 (defun generate-prompt-turn-start (name &key (short t) (newline t))
 ;````````````````````````````````````````````````````````````````````
 ; Generates a turn start prefix for the prompt.

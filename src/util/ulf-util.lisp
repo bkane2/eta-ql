@@ -3,6 +3,8 @@
 ; Helper functions for working with ulf.
 ;
 
+(in-package :eta)
+
 (defun special-op? (ulf)
 ;`````````````````````````
 ; Checks whether a ULF is a special operator or macro, e.g. sub, k, set-of, etc.

@@ -14,6 +14,8 @@
 ;; Functions described in more detail in their headers.
 ;;
 
+(in-package :eta)
+
 (setf *print-circle* t) ; needed to prevent recursive loop when printing plan-step
 
 (defstruct plan-node

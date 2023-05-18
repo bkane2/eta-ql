@@ -22,6 +22,8 @@
 ;; 
 ;;
 
+(in-package :eta)
+
 ;`````````````````````````````````````````````````````
 ; Store a global hash table of episode schema headers to
 ; the corresponding schema structures.

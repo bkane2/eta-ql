@@ -4,6 +4,8 @@
 ;; Contains functions used for embedding and retrieving knowledge.
 ;;
 
+(in-package :eta)
+
 (defun precompute-knowledge-embeddings (knowledge path)
 ;````````````````````````````````````````````````````````````
 ; Precomputes embeddings for a given list of knowledge strings,
