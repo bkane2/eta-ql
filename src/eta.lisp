@@ -151,13 +151,16 @@
 (defstruct user-config
 ;```````````````````````````````
 ; contains the following fields:
-; user-id      : a unique ID for the user
-; user-name    : the name of the user
-; start-schema : the dialogue schema predicate to use to begin dialogue
+; user-id        : a unique ID for the user
+; user-name      : the name of the user
+; start-schema   : the dialogue schema predicate to use to begin dialogue
+; use-embeddings : a temporary option used for experiments; controls whether
+;                  or not embedding-based knowledge retrieval is used
 ;
   (user-id "_test")
   (user-name "John Doe")
   (start-schema 'have-eta-dialog.v)
+  (use-embeddings t)
 ) ; END defstruct user-config
 
 
@@ -240,6 +243,10 @@
 (defun get-quit-conversation ()
   (if *sessions* (session-quit-conversation (car *sessions*)))
 ) ; END get-quit-conversation
+
+(defun get-use-embeddings ()
+  (if *sessions* (user-config-use-embeddings (session-config-user (car *sessions*))))
+) ; END get-use-embeddings
 
 (defun has-plan ()
   (if *sessions* (ds-curr-plan (session-ds (car *sessions*))))
@@ -3625,7 +3632,7 @@
     )
 
     ; Get relevant habitual/event schema knowledge
-    (when (member 'epi-schemas types)
+    (when (and (member 'epi-schemas types) (get-use-embeddings))
       (setq relevant-epi-schemas (reverse (retrieve-relevant-epi-schemas query-str *embedding-path*)))
 
       (format t "~%  * Generating response using retrieved epi-schemas~%      (from \"~a\"):~%   <~a> "
@@ -3640,7 +3647,7 @@
     )
 
     ; Get relevant episodic memory
-    (when (member 'memory types)
+    (when (and (member 'memory types) (get-use-embeddings))
       (setq relevant-memory (reverse (retrieve-relevant-knowledge-from-kb query-str *embedding-path*)))
 
       (format t "~%  * Generating response using retrieved facts~%      (from \"~a\"):~%   ~a " query-str relevant-memory) ; DEBUGGING
