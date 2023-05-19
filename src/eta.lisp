@@ -635,6 +635,7 @@
 
   ; Global variables used for IO
   (defparameter *input* nil)
+  (defparameter *config* nil)
 
   ; Precompute embeddings for any init-knowledge and epi-schemas
   (when (boundp '*init-knowledge*)
