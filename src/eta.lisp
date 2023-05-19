@@ -744,6 +744,7 @@
       (*sessions*
         (cond
           ((and (has-plan) (not (get-quit-conversation)))
+            (write-debug-file (user-config-user-id (session-config-user (car *sessions*))) *io-dir* "curr-session.txt") ; DEBUGGING
             (do-task (select-and-remove-task))
             (push (car *sessions*) *sessions-dequeue*))
           ((get-output-buffer)
@@ -886,6 +887,7 @@
 
   ; Pop the current front of the task queue
   (let ((curr-task (car (ds-task-queue (get-ds)))))
+    (write-debug-file curr-task (get-io-path) "curr-task.txt") ; DEBUGGING
     (setf (ds-task-queue (get-ds)) (cdr (ds-task-queue (get-ds))))
     curr-task)
 ) ; END select-and-remove-task
@@ -1278,12 +1280,12 @@
     (if (null user-gist-clause)
       (return-from suggest-reaction-to-input nil))
 
-    (format t "~% ========== Eta Reaction ==========") ; DEBUGGING
+    ;; (format t "~% ========== Eta Reaction ==========") ; DEBUGGING
 
     ; Use choice tree '*reaction-to-input* to select reaction to gist clause
-    (format t "~%  * Reacting to user clause: ~a " user-gist-clause) ; DEBUGGING
+    ;; (format t "~%  * Reacting to user clause: ~a " user-gist-clause) ; DEBUGGING
     (setq choice (choose-result-for user-gist-clause '*reaction-to-input*))
-    (format t "~%  * Chose reaction: ~a ~%" choice) ; DEBUGGING
+    ;; (format t "~%  * Chose reaction: ~a ~%" choice) ; DEBUGGING
 
     (cond
       ; null choice -- do nothing (return nil)
@@ -1791,9 +1793,9 @@
           (setq prev-step-ep-name (dialogue-turn-episode-name prev-step))
           (setq user-gist-clauses (dialogue-turn-gists prev-step)))
 
-        (format t "~% ========== Eta Generation ==========") ; DEBUGGING
-        (format t "~%  * Found user gist clauses (from previous episode ~a):~%   ~a " prev-step-ep-name user-gist-clauses) ; DEBUGGING
-        (format t "~%  * Paraphrasing utterance:~%    ~a " gist) ; DEBUGGING
+        ;; (format t "~% ========== Eta Generation ==========") ; DEBUGGING
+        ;; (format t "~%  * Found user gist clauses (from previous episode ~a):~%   ~a " prev-step-ep-name user-gist-clauses) ; DEBUGGING
+        ;; (format t "~%  * Paraphrasing utterance:~%    ~a " gist) ; DEBUGGING
 
         (cond
           ; Use GPT3-based paraphrase model if available
@@ -1855,7 +1857,7 @@
         (setq user-semantics (apply #'append (mapcar (lambda (e)
           (resolve-references (get-semantic-interpretations-characterizing-episode e (get-ds)))) expr)))))
 
-    (format t "~% ========== Eta Generation ==========") ; DEBUGGING
+    ;; (format t "~% ========== Eta Generation ==========") ; DEBUGGING
     ;; (format t "~% user gist clause (for ~a) is ~a" expr user-gists) ; DEBUGGING
     ;; (format t "~% user semantics (for ~a) is ~a ~%" expr user-semantics) ; DEBUGGING
 
@@ -1866,9 +1868,9 @@
       (return-from plan-reply-to nil))
 
     ; Use choice tree '*reply-to-input* to form reply to user gist clause
-    (format t "~%  * Replying to user clause: ~a " user-gist) ; DEBUGGING
+    ;; (format t "~%  * Replying to user clause: ~a " user-gist) ; DEBUGGING
     (setq choice (choose-result-for user-gist '*reply-to-input*))
-    (format t "~%  * Chose reply: ~a " choice) ; DEBUGGING
+    ;; (format t "~%  * Chose reply: ~a " choice) ; DEBUGGING
 
     ; 'choice' may be an instantiated reassembly pattern corresponding to a
     ; gist-clause (directive :gist), to be contextually paraphrased by Eta
@@ -1969,12 +1971,12 @@
     (if (null user-gist)
       (return-from plan-reaction-to nil))
 
-    (format t "~% ========== Eta Reaction ==========") ; DEBUGGING
+    ;; (format t "~% ========== Eta Reaction ==========") ; DEBUGGING
 
     ; Use choice tree '*reaction-to-input* to select reaction to gist clause
-    (format t "~%  * Reacting to user clause: ~a " user-gist) ; DEBUGGING
+    ;; (format t "~%  * Reacting to user clause: ~a " user-gist) ; DEBUGGING
     (setq choice (choose-result-for user-gist '*reaction-to-input*))
-    (format t "~%  * Chose reaction: ~a ~%" choice) ; DEBUGGING
+    ;; (format t "~%  * Chose reaction: ~a ~%" choice) ; DEBUGGING
 
     ; 'choice' may be an instantiated reassembly pattern corresponding to a
     ; gist-clause (directive :gist), to be contextually paraphrased by Eta
@@ -2053,7 +2055,7 @@
         (setq eta-semantics (second tuple))
         (store-semantic-interpretation-characterizing-episode eta-semantics ep-name '^me '^you (get-ds))))
 
-    (format t "answer to output: ~a~%" ans) ; DEBUGGING
+    ;; (format t "answer to output: ~a~%" ans) ; DEBUGGING
 
     ; Create say-to.v subplan from answer
     (init-plan-from-episode-list (list :episodes (episode-var) (create-say-to-wff ans)))
@@ -2091,7 +2093,7 @@
         (setq eta-semantics (second tuple))
         (store-semantic-interpretation-characterizing-episode eta-semantics ep-name '^me '^you (get-ds))))
 
-    (format t "gist answer to output: ~a~%" ans) ; DEBUGGING
+    ;; (format t "gist answer to output: ~a~%" ans) ; DEBUGGING
 
     ; Create paraphrase-to.v subplan from answer
     (init-plan-from-episode-list (list :episodes (episode-var) (create-paraphrase-to-wff ans)))
@@ -2218,7 +2220,7 @@
   (let (utterance)
     (if (null info) (return-from plan-tell nil))
 
-    (format t "~% ========== Eta Generation ==========") ; DEBUGGING
+    ;; (format t "~% ========== Eta Generation ==========") ; DEBUGGING
 
     (cond
       ((variable? info)
@@ -2252,7 +2254,7 @@
   (let (utterance)
     (if (null info) (return-from plan-answer nil))
 
-    (format t "~% ========== Eta Generation ==========") ; DEBUGGING
+    ;; (format t "~% ========== Eta Generation ==========") ; DEBUGGING
 
     (cond
       ((variable? info)
@@ -2284,7 +2286,7 @@
   (let (utterance)
     (if (null question) (return-from plan-ask nil))
 
-    (format t "~% ========== Eta Generation ==========") ; DEBUGGING
+    ;; (format t "~% ========== Eta Generation ==========") ; DEBUGGING
 
     (cond
       ((variable? question)
@@ -2921,10 +2923,10 @@
 
         (setq prev-step-gists (reverse (remove-duplicates prev-step-gists :test #'equal)))
 
-        (format t "~% ========== User Interpretation ==========")
-        (format t "~%  * ETA gist clauses that the user is responding to (from episodes ~a)~%   = ~a "
-          (remove nil (cons prev-step-ep-name relative-ep-names)) prev-step-gists)
-        (format t "~%  * Using gist clause for context:~%    ~a " (car (last prev-step-gists))) ; DEBUGGING
+        ;; (format t "~% ========== User Interpretation ==========")
+        ;; (format t "~%  * ETA gist clauses that the user is responding to (from episodes ~a)~%   = ~a "
+        ;;   (remove nil (cons prev-step-ep-name relative-ep-names)) prev-step-gists)
+        ;; (format t "~%  * Using gist clause for context:~%    ~a " (car (last prev-step-gists))) ; DEBUGGING
 
         ; Compute the "interpretation" (gist clauses) of the user input,
         ; which will be done with a gist-clause packet selected using the
@@ -2940,7 +2942,7 @@
 
         ; Remove contradicting user gist-clauses (if any)
         (setq user-gists (remove-duplicates (remove-contradiction user-gists) :test #'equal))
-        (format t "~%  * Gist clauses for episode ~a:~%   ~a" ep-name user-gists) ; DEBUGGING
+        ;; (format t "~%  * Gist clauses for episode ~a:~%   ~a" ep-name user-gists) ; DEBUGGING
 
         ; Store user gist-clauses in memory and input queue
         (dolist (user-gist user-gists)
@@ -2952,7 +2954,7 @@
         (setq user-semantics (remove-duplicates (remove nil
           (mapcar #'form-semantics-from-gist-clause user-gists)) :test #'equal))
 
-        (format t "~%  * Semantics for episode ~a:~%   ~a" ep-name user-semantics) ; DEBUGGING
+        ;; (format t "~%  * Semantics for episode ~a:~%   ~a" ep-name user-semantics) ; DEBUGGING
 
         ; Store the semantic interpretations in memory and input queue
         (dolist (ulf user-semantics)
@@ -2973,7 +2975,7 @@
         (setq user-pragmatics (remove-duplicates (remove nil
           (apply #'append (mapcar #'form-pragmatics-from-gist-clause user-gists))) :test #'equal))
 
-        (format t "~%  * Pragmatics for episode ~a:~%   ~a ~%" ep-name user-pragmatics) ; DEBUGGING
+        ;; (format t "~%  * Pragmatics for episode ~a:~%   ~a ~%" ep-name user-pragmatics) ; DEBUGGING
 
         ; Add each pragmatic wff to context (characterizing ep-name) and input queue
         (dolist (ulf user-pragmatics)
@@ -3015,7 +3017,7 @@
         (setq goal-step (car (get-from-context '(?ka step1-toward.p ?goal) (get-ds))))
         (setq ka (first goal-step))
         
-        (format t "~%Found ka = ~a" ka) ; DEBUGGING
+        ;; (format t "~%Found ka = ~a" ka) ; DEBUGGING
 
         ; If the (ka ...) consists of an action verb, check arguments of action verb against arguments of
         ; the matched action to check if the action successfully instantiates (ka ...)
@@ -3091,7 +3093,7 @@
         (setq user-gists (dialogue-turn-gists prev-step)))
       ; Get Eta gist clauses
       (setq eta-gists (form-gist-clauses-using-language-model expr (car (last user-gists)) '^me))
-      (format t "~%  * Storing Eta gist clauses for episode ~a:~%   ~a ~%" ep-name eta-gists) ; DEBUGGING
+      ;; (format t "~%  * Storing Eta gist clauses for episode ~a:~%   ~a ~%" ep-name eta-gists) ; DEBUGGING
       ; Store any gist clauses for episode and parent episode
       (mapcar (lambda (gist)
           (when (not (member 'nil gist))
@@ -3159,7 +3161,7 @@
 
     ; Determine answers by recalling from history
     (setq ans `(quote ,(recall-answer object-locations (eval user-semantics) (get-ds))))
-    (format t "recalled answer: ~a~%" ans) ; DEBUGGING
+    ;; (format t "recalled answer: ~a~%" ans) ; DEBUGGING
 
     ; Bind ans to variable given in plan (e.g. ?ans-relations)
     (push (list ans-var ans) var-bindings)
@@ -3192,7 +3194,7 @@
     (if (not (answer-list? ans)) (setq ans nil))
     (if ans (setq ans `(quote ,ans)))
 
-    (format t "received answer: ~a~% (for variable ~a)~%" ans ans-var) ; DEBUGGING
+    ;; (format t "received answer: ~a~% (for variable ~a)~%" ans ans-var) ; DEBUGGING
 
     ; Bind ans to variable given in plan (e.g. ?ans-relations)
     (push (list ans-var ans) var-bindings)
@@ -3293,7 +3295,7 @@
 
     (setq sk-var (second expr))
     (setq sk-name (choose-variable-restrictions sk-var (third expr)))
-    (format t "chose value ~a for variable ~a~%" sk-name sk-var) ; DEBUGGING
+    ;; (format t "chose value ~a for variable ~a~%" sk-name sk-var) ; DEBUGGING
 
     ; Store fact that sk-name chosen in context (removing any existing choice)
     ; TODO: perhaps choose.v actions are 'instantaneous' and should therefore be
@@ -3473,8 +3475,8 @@
       (setq modifier (car restrictions)) (setq restrictions (second restrictions)))
     (setq lambda-descr restrictions)
     (setq candidates (find-all-instances-context lambda-descr))
-    (format t "given restriction ~a, found candidates ~a~%" lambda-descr candidates) ; DEBUGGING
-    (format t "using modifier ~a to choose~%" modifier) ; DEBUGGING
+    ;; (format t "given restriction ~a, found candidates ~a~%" lambda-descr candidates) ; DEBUGGING
+    ;; (format t "using modifier ~a to choose~%" modifier) ; DEBUGGING
     (setq sk-name (cond
       ((equal modifier 'random.a)
         (nth (random (length candidates)) candidates))
@@ -3619,31 +3621,31 @@
         (setq preconds (append preconds (get-schema-section-wffs schema-instance :preconds)))
         (setq goals (append goals (get-schema-section-wffs schema-instance :goals))))
 
-      (format t "~%  * Generating response using schemas: <~a> "
-        (str-join (mapcar (lambda (schema)
-          (string (schema-predicate (gethash schema (ds-schema-instances (get-ds)))))) schemas) #\,)) ; DEBUGGING
+      ;; (format t "~%  * Generating response using schemas: <~a> "
+      ;;   (str-join (mapcar (lambda (schema)
+      ;;     (string (schema-predicate (gethash schema (ds-schema-instances (get-ds)))))) schemas) #\,)) ; DEBUGGING
     )
 
     ; Get relevant habitual/event schema knowledge
     (when (and (member 'epi-schemas types) (get-use-embeddings))
       (setq relevant-epi-schemas (reverse (retrieve-relevant-epi-schemas query-str *embedding-path*)))
 
-      (format t "~%  * Generating response using retrieved epi-schemas~%      (from \"~a\"):~%   <~a> "
-        query-str (str-join (mapcar (lambda (schema) (string (schema-predicate schema))) relevant-epi-schemas) #\,)) ; DEBUGGING
+      ;; (format t "~%  * Generating response using retrieved epi-schemas~%      (from \"~a\"):~%   <~a> "
+      ;;   query-str (str-join (mapcar (lambda (schema) (string (schema-predicate schema))) relevant-epi-schemas) #\,)) ; DEBUGGING
 
       ; TODO: ensure that header precedes the facts for each schema
       (setq relevant-epi-schema-knowledge (apply #'append (mapcar (lambda (schema)
           (retrieve-relevant-schema-facts query-str schema *embedding-path*))
         relevant-epi-schemas)))
 
-      (format t "~%  * Using the following facts from the retrieved epi-schemas:~%   ~a " relevant-epi-schema-knowledge) ; DEBUGGING
+      ;; (format t "~%  * Using the following facts from the retrieved epi-schemas:~%   ~a " relevant-epi-schema-knowledge) ; DEBUGGING
     )
 
     ; Get relevant episodic memory
     (when (and (member 'memory types) (get-use-embeddings))
       (setq relevant-memory (reverse (retrieve-relevant-knowledge-from-kb query-str *embedding-path*)))
 
-      (format t "~%  * Generating response using retrieved facts~%      (from \"~a\"):~%   ~a " query-str relevant-memory) ; DEBUGGING
+      ;; (format t "~%  * Generating response using retrieved facts~%      (from \"~a\"):~%   ~a " query-str relevant-memory) ; DEBUGGING
     )
 
     ; Combine facts and convert to strings

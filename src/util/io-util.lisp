@@ -274,6 +274,17 @@
 
 
 
+(defun write-debug-file (str path fname)
+;`````````````````````````````````````````
+; Writes a debug str as a text file to the given path
+;
+  (with-open-file (outfile (concatenate 'string path fname)
+    :direction :output :if-exists :supersede :if-does-not-exist :create)
+    (format outfile "~a" str))
+)  ; END write-debug-file
+
+
+
 (defun error-message (str mode)
 ;`````````````````````````````````````
 ; Print error message to the console, and if in live mode, to error.txt
