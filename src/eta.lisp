@@ -438,7 +438,7 @@
     (setf (ds-kb ds) (make-hash-table :test #'equal))
 
     ; Initialize timegraph
-    (when (get-timegraph-mode)
+    (when (get-timegraph-mode *config-agent*)
       (construct-timegraph ds))
 
     ; Initialize time
