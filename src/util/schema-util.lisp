@@ -404,33 +404,35 @@
 
     ; Return with warning if no variables in participants list
     (when (null vars)
-      (format t "@@@ Warning: Attempt to substitute values~%    ~a~%    in participants ~a, which has no variables~%"
-                args participants)
+      ;; (format t "@@@ Warning: Attempt to substitute values~%    ~a~%    in participants ~a, which has no variables~%"
+      ;;           args participants)
       (return-from bind-schema-args schema))
 
     (cond
       ; Case 1: More args than variables
       ((> (length args) (length vars))
-        (format t "@@@ Warning: More values supplied, viz.,~%    ~a,~%    than participants ~a has variables~%"
-                  args participants)
+        ;; (format t "@@@ Warning: More values supplied, viz.,~%    ~a,~%    than participants ~a has variables~%"
+        ;;           args participants)
         ; If ^me or ^you are already in participants of the schema, remove them from the args list
         (if (member '^me participants) (setq args (remove '^me args)))
         (if (member '^you participants) (setq args (remove '^you args)))
         ; Otherwise remove superfluous arguments from end of list
         (setq args (butlast args (- (length args) (length vars))))
-        (format t "@@@ Now using args: ~a~%" args))
+        ;; (format t "@@@ Now using args: ~a~%" args)
+      )
 
       ; Case 2: Fewer args than variables
       ((< (length args) (length vars))
-        (format t "@@@ Warning: Fewer values supplied, viz.,~%    ~a,~%    than participants ~a has variables~%"
-                  args participants)
+        ;; (format t "@@@ Warning: Fewer values supplied, viz.,~%    ~a,~%    than participants ~a has variables~%"
+        ;;           args participants)
         ; Assume first two missing args are ^me and ^you if they don't appear in the header
         (if (and (>= (- (length vars) (length args)) 2) (not (member '^you participants)))
           (setq args (cons '^you args)))
         (if (not (member '^me participants))
           (setq args (cons '^me args)))
         (setq vars (butlast vars (- (length vars) (length args))))
-        (format t "@@@ Now using args: ~a, for vars: ~a~%" args vars)))
+        ;; (format t "@@@ Now using args: ~a, for vars: ~a~%" args vars)
+      ))
             
     ; Length of 'args' and 'vars' are equal (or have just been equalized)
     (mapcar (lambda (arg var)

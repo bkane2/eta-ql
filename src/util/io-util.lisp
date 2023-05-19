@@ -217,13 +217,13 @@
       (format outfile "~%#~D: ~a" output-count wordstring))
 
     ; Also write ETA's words to standard output:
-    (format t "~% ... ")
-    (dolist (word wordlist)
-      (format t "~a " word)
-      (if (or (member word '(? ! \.))
-              (member (car (last (explode word))) '(#\? #\! #\.)))
-        (format t "~%")))
-    (format t "~%")
+    ;; (format t "~% ... ")
+    ;; (dolist (word wordlist)
+    ;;   (format t "~a " word)
+    ;;   (if (or (member word '(? ! \.))
+    ;;           (member (car (last (explode word))) '(#\? #\! #\.)))
+    ;;     (format t "~%")))
+    ;; (format t "~%")
 )) ; END say-words
 
 
