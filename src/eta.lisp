@@ -81,6 +81,7 @@
 ;                         BLLIP: uses the ULF parser created by Len Schubert based on the Charniak BLLIP parser. Requires
 ;                                both the :lenulf and :standardize-ulf packages to be included in the dependencies, and for
 ;                                BLLIP to be installed locally, with the correct path specified in the :lenulf package.
+; timegraph-mode        : T to use the timegraph; NIL otherwise.
 ;                         RULE (default): uses pattern transduction trees to parse gist clauses into ULF.
 ; session-number        : The number session to load (a session-number of 1 corresponds to the files in the day1 directory
 ;                         of an avatar) in a multi-session dialogue.
@@ -94,6 +95,7 @@
   (generation-mode 'GPT3)
   (interpretation-mode 'RULE)
   (parser-mode 'RULE)
+  (timegraph-mode NIL)
   (session-number 1)
 ) ; END defstruct agent-config
 
@@ -132,6 +134,10 @@
   (agent-config-parser-mode config-agent)
 ) ; END get-parser-mode
 
+(defun get-timegraph-mode (config-agent)
+  (agent-config-timegraph-mode config-agent)
+) ; END get-timegraph-mode
+
 (defun set-generation-mode (config-agent mode)
   (setf (agent-config-generation-mode config-agent) mode)
 ) ; END set-generation-mode
@@ -143,6 +149,10 @@
 (defun set-parser-mode (config-agent mode)
   (setf (agent-config-parser-mode config-agent) mode)
 ) ; END set-parser-mode
+
+(defun set-timegraph-mode (config-agent mode)
+  (setf (agent-config-timegraph-mode config-agent) mode)
+) ; END set-timegraph-mode
 
 
 
@@ -428,7 +438,8 @@
     (setf (ds-kb ds) (make-hash-table :test #'equal))
 
     ; Initialize timegraph
-    (construct-timegraph ds)
+    (when (get-timegraph-mode)
+      (construct-timegraph ds))
 
     ; Initialize time
     (setf (ds-time ds) 'NOW0)
