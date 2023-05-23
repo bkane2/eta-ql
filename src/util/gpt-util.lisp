@@ -136,7 +136,7 @@
       prev-utterance
       (generate-prompt-turn-start (string ^me))))
     (when incomplete-utterance
-      (setq prompt (concatenate 'string prompt " " incomplete-utterance)))
+      (setq prompt (concatenate 'string prompt " " incomplete-utterance (generate-prompt-turn-start (string ^me)))))
     prompt
 )) ; END generate-prompt-paraphrase
 
